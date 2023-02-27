@@ -901,7 +901,7 @@ function connect(pios, conf, reg, convert, passon, upprot, dwprot, webProtect, p
             log.info("passon", passon)
             log.info("upprot", upprot)
             log.info("dwprot", dwprot)
-            sys.taskInitEx(mqttTask, k, pios, reg, convert, passon, upprot, dwprot, unpack(v, 2))
+            sys.taskInit(mqttTask, k, pios, reg, convert, passon, upprot, dwprot, unpack(v, 2))
         elseif v[1] and v[1]:upper() == "HTTP" then
             log.warn("----------------------- HTTP is start! --------------------------------------")
             sys.taskInit(function(cid, convert, passon, upprot, dwprot, uid, method, url, timeout, way, dtype, basic,
