@@ -49,9 +49,9 @@ local dtu = {
     conf = {{}, {}, {}, {}, {}, {}, {}}, -- 用户通道参数
     preset = {number = "", delay = 1, smsword = "SMS_UPDATE"}, -- 用户预定义的来电电话,延时时间,短信关键字
     uconf = {
-        {1, 115200, 8, uart.PAR_NONE, uart.STOP_1},
-        {2, 115200, 8, uart.PAR_NONE, uart.STOP_1},
-        {3, 115200, 8, uart.PAR_NONE, uart.STOP_1},
+        {1, 115200, 8, 1,  uart.None},
+        {2, 115200, 8, 1,  uart.None},
+        {3, 115200, 8, 1,  uart.None},
     }, -- 串口配置表
     gps = {
         fun = {"", "115200", "0", "5", "1", "json", "100", ";", "60"}, -- 用户捆绑GPS的串口,波特率，功耗模式，采集间隔,采集方式支持触发和持续, 报文数据格式支持 json 和 hex，缓冲条数,分隔符,状态报文间隔
@@ -462,6 +462,7 @@ local function read(uid, idx)
             log.info("进到识别码里面来来4")
             sys.publish("NET_SENT_RDY_" .. s:sub(6, 6), s:sub(8, -1))
         else
+            log.info("进到识别码里面来来5")
             write(uid, "ERROR\r\n")
         end
     end
@@ -479,8 +480,8 @@ local function streamEnd(uid)
 end
 function uart_INIT(i, uconf)
     uconf[i][1] = tonumber(uconf[i][1])
-    log.info("串口的数据是",uconf[i][1], uconf[i][2], uconf[i][3], uconf[i][5], uconf[i][4],uconf[i][6])
-    uart.setup(uconf[i][1], uconf[i][2], uconf[i][3], uconf[i][5], uconf[i][4])
+    log.info("串口的数据是",uconf[i][1], uconf[i][2], uconf[i][3], uconf[i][4], uconf[i][5],uconf[i][6])
+    uart.setup(uconf[i][1], uconf[i][2], uconf[i][3], uconf[i][4], uconf[i][5])
     uart.on(uconf[i][1], "sent", writeDone)
     if uconf[i][1] == uart.USB or tonumber(dtu.uartReadTime) > 0 then
         log.info("进到这里面来了呀1")
