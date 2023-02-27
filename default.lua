@@ -1,11 +1,10 @@
 default = {}
 
 require "libnet"
-iot_fota=require"iot_fota"
+libfota=require"libfota"
 db=require "db"
 create =require "create"
 dtulib=require "dtulib"
--- require "soc_fota"
 
 
 -- 串口缓冲区最大值
@@ -599,7 +598,14 @@ sys.taskInit(function()
         -- 检查是否有更新程序
         if tonumber(dtu.fota) == 1 then
             log.info("----- update firmware:", "start!")
-            iot_fota.otaDemo()
+            libfota.request(function(result)
+                log.info("OTA", result)
+                if result == 0 then
+                    log.info("ota", "succuss")
+                    -- TODO 重启
+                end
+                sys.publish("IRTU_UPDATE_RES", result == 0)
+            end)
             local res, val = sys.waitUntil("IRTU_UPDATE_RES")
             rst = rst or val
             log.info("----- update firmware:", "end!")
