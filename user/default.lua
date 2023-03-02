@@ -135,45 +135,79 @@ end
 -- 配置串口
 if dtu.pwrmod ~= "energy" then pm.request(pm.LIGHT) end
 
--- 每隔1分钟重置串口计数
-sys.timerLoopStart(function()
-    flow = tonumber(dtu.flow)
-    if flow and flow ~= 0 then
-        if flowCount[1] > flow then
-            uart.on(1, "receive")
-            log.info("uart1 close")
-            uart.close(1)
-            log.info("uart1.read length count:", flowCount[1])
-        end
-        if flowCount[2] > flow then
-            uart.on(2, "receive")
-            log.info("uart2 close")
-            uart.close(2)
-            log.info("uart2.read length count:", flowCount[2])
-        end
-    end
-    if timecnt > 60 then
-        timecnt = 1
-        flowCount[4], flowCount[1], flowCount[2], flowCount[3] = 0, 0, 0, 0
-    else
-        timecnt = timecnt + 1
-    end
-end, 1000)
+--每隔1分钟重置串口计数
+-- sys.timerLoopStart(function()
+--     flow = tonumber(dtu.flow)
+--     if flow and flow ~= 0 then
+--         if flowCount[1] > flow then
+--             uart.on(1, "receive")
+--             log.info("uart1 close")
+--             uart.close(1)
+--             log.info("uart1.read length count:", flowCount[1])
+--         end
+--         if flowCount[2] > flow then
+--             uart.on(2, "receive")
+--             log.info("uart2 close")
+--             uart.close(2)
+--             log.info("uart2.read length count:", flowCount[2])
+--         end
+--     end
+--     if timecnt > 60 then
+--         timecnt = 1
+--         flowCount[4], flowCount[1], flowCount[2], flowCount[3] = 0, 0, 0, 0
+--     else
+--         timecnt = timecnt + 1
+--     end
+-- end, 1000)
 
 -- 串口写数据处理
-function write(uid, str)
-    log.info("进到串口写里面来了")
+function write(uid, str,cid)
+    log.info("进到串口写里面来了",str)
+    local dwprotFnc = dtu.dwprot and dtu.dwprot[cid] and dtu.dwprot[cid] ~= "" and loadstring(dtu.dwprot[cid]:match("function(.+)end"))
+    local upprotFnc = dtu.upprot and dtu.upprot[cid] and dtu.upprot[cid] ~= "" and loadstring(dtu.upprot[cid]:match("function(.+)end"))
     uid = tonumber(uid)
     if not str or str == "" or not uid then return end
     if uid == uart.USB then return uart.write(uart.USB, str) end
+    -- if str:sub(1, 5) == "rrpc," or str:sub(1, 7) == "config," then
+    --     local res, msg = pcall(create.userapi, str)
+    --     if not res then
+    --         log.error("远程查询的API错误:", msg)
+    --     end
+    --     if dtu.convert == 0 and upprotFnc then -- 转换为用户自定义报文
+    --         res, msg = pcall(upprotFnc, msg)
+    --         if not res then
+    --             log.error("数据流模版错误:", msg)
+    --         end
+    --     end
+    --    sys.publish("NET_SENT_RDY_" .. uid, msg)
+    -- elseif dtu.convert == 1 then -- 转换HEX String
+    --     --sys.publish("NET_RECV_WAIT_" .. uid, uid, (data:fromHex()))
+    --     str=str:fromHex()
+    -- elseif dtu.convert == 0 and dwprotFnc then -- 转换用户自定义报文
+    --     local res, msg = pcall(dwprotFnc, str)
+    --     if not res or not msg then
+    --         log.error("数据流模版错误:", msg)
+    --     else
+    --         -- sys.publish("NET_RECV_WAIT_" .. uid, uid, res and msg or str)
+    --         str=res and msg or str
+    --     end
+    -- else -- 默认不转换
+    --     log.info("走到这里了呀不转换",str)
+    --     -- sys.publish("NET_RECV_WAIT_" .. uid, uid, str)
+    -- end
     if str ~= true then
         for i = 1, #str, SENDSIZE do
             table.insert(writeBuff[uid], str:sub(i, i + SENDSIZE - 1))
         end
+        log.info("str的实际值是",str)
         log.warn("uart" .. uid .. ".write data length:", writeIdle[uid], #str)
     end
     if writeIdle[uid] and writeBuff[uid][1] then
+        log.info("我是不是进到这了啊",writeBuff[uid][1])
+        log.info("我是不是进到这了啊hex",writeBuff[uid][1]:toHex())
         if 0 ~= uart.write(uid, writeBuff[uid][1]) then
+            log.info("UARTLEN",uartlen)
+            log.info("WRITEUID",writeBuff[uid][1])
             table.remove(writeBuff[uid], 1)
             writeIdle[uid] = false
             log.warn("UART_" .. uid .. " writing ...")
@@ -185,10 +219,13 @@ local function writeDone(uid)
     if #writeBuff[uid] == 0 then
         writeIdle[uid] = true
         sys.publish("UART_" .. uid .. "_WRITE_DONE")
+        log.info("进到if里面来了居然")
         log.warn("UART_" .. uid .. "write done!")
     else
         writeIdle[uid] = false
+        log.info("我到这了也",writeBuff[uid][1])
         uart.write(uid, table.remove(writeBuff[uid], 1))
+        log.info("进到else里面来了居然")
         log.warn("UART_" .. uid .. "writing ...")
     end
 end
@@ -339,26 +376,7 @@ cmd.rrpc = {
 
 }
 
---- 用户串口和远程调用的API接口
--- @string str：执行API的命令字符串
--- @retrun str : 处理结果字符串
-function create.userapi(str)
-    local t = str:match("(.+)\r\n") and str:match("(.+)\r\n"):split(',') or str:split(',')
-    local first = table.remove(t, 1)
-    local second = table.remove(t, 1) or ""
-    log.info("FIRST",first)
-    log.info("SECONDE",second)
-    log.info("THREE",three)
-    if tonumber(second) and tonumber(second) > 0 and tonumber(second) < 8 then
-        log.info("进到这里了1")
-        return cmd[first]["pipe"](t, second) .. "\r\n"
-    elseif cmd[first][second] then
-        log.info("进到这里了2")
-        return cmd[first][second](t, str) .. "\r\n"
-    else
-        return "ERROR\r\n"
-    end
-end
+
 -- 串口读指令
 local function read(uid, idx)
     log.error("uart.read--->", uid, idx)
@@ -481,7 +499,16 @@ end
 function uart_INIT(i, uconf)
     uconf[i][1] = tonumber(uconf[i][1])
     log.info("串口的数据是",uconf[i][1], uconf[i][2], uconf[i][3], uconf[i][4], uconf[i][5],uconf[i][6])
-    uart.setup(uconf[i][1], uconf[i][2], uconf[i][3], uconf[i][4], uconf[i][5])
+    local stb=uconf[i][5]==0 and 1 or 2
+    local parity=uart.None
+    if uconf[i][4]==0 then
+        parity=uart.EVEN
+    elseif  uconf[i][4]==1 then
+        parity=uart.Odd
+    elseif uconf[i][4]==2 then
+        parity=uart.None
+    end
+    uart.setup(uconf[i][1], uconf[i][2], uconf[i][3], stb,parity)
     uart.on(uconf[i][1], "sent", writeDone)
     if uconf[i][1] == uart.USB or tonumber(dtu.uartReadTime) > 0 then
         log.info("进到这里面来了呀1")
@@ -506,17 +533,18 @@ function uart_INIT(i, uconf)
     end
     -- 处理串口接收到的数据
     sys.subscribe("UART_RECV_WAIT_" .. uconf[i][1], read)
-    --sys.subscribe("UART_SENT_RDY_1", write)
     sys.subscribe("UART_SENT_RDY_" .. uconf[i][1], write)
     -- 网络数据写串口延时分帧
-    sys.subscribe("NET_RECV_WAIT_" .. uconf[i][1], function(uid, str)
+    sys.subscribe("NET_RECV_WAIT_" .. uconf[i][1], function(uid, str,cid)
+        log.info("uid123",uid,str)
         if tonumber(dtu.netReadTime) and tonumber(dtu.netReadTime) > 5 then
             for j = 1, #str, SENDSIZE do
                 table.insert(writeBuff[uid], str:sub(j, j + SENDSIZE - 1))
             end
-            sys.timerStart(sys.publish, tonumber(dtu.netReadTime) or 30, "UART_SENT_RDY_" .. uid, uid, true)
+            sys.timerStart(sys.publish, tonumber(dtu.netReadTime) or 30, "UART_SENT_RDY_" .. uid, uid, true,cid)
         else
-            sys.publish("UART_SENT_RDY_" .. uid, uid, str)
+            log.info("uid122",uid,str)
+            sys.publish("UART_SENT_RDY_" .. uid, uid, str,cid)
         end
     end)
     -- 485方向控制
