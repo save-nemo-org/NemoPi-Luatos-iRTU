@@ -8,7 +8,31 @@ function restart(r)
     log.warn("sys.restart",r)
     rtos.reboot()
 end
-
+--- table.merge(...) 合并多个表格
+-- @table[...],要合并的多个table
+-- @return table,返回合并后的表格
+-- @usage table.merge({1,2,3},{3, a = 4, b = 5, 6})
+function merge(...)
+    local tabs = {...}
+    if #tabs == 0 then return {} end
+    local origin = tabs[1]
+    for i = 2, #tabs do
+        if origin then
+            if tabs[i] then
+                for k, v in pairs(tabs[i]) do
+                    if type(k) == "number" then
+                        table.insert(origin, v)
+                    else
+                        origin[k] = v
+                    end
+                end
+            end
+        else
+            origin = tabs[i]
+        end
+    end
+    return origin
+end
 
 local Content_type = {'application/x-www-form-urlencoded', 'application/json', 'application/octet-stream'}
 
@@ -57,9 +81,9 @@ function request(method, url, timeout, params, data, ctype, basic, head, cert, f
         local tmp = {}
         for k, v in string.gmatch(head, "(.-):%s*(.-)\r\n") do tmp[k] = v end
         -- headers = tmp
-        table.merge(headers, tmp)
+        merge(headers, tmp)
     elseif type(head) == "table" then
-        table.merge(headers, head)
+        merge(headers, head)
     end
      -- 处理url的协议头和鉴权
      _, offset, https = url:find("^(%a+)://")

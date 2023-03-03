@@ -168,33 +168,6 @@ function write(uid, str,cid)
     uid = tonumber(uid)
     if not str or str == "" or not uid then return end
     if uid == uart.USB then return uart.write(uart.USB, str) end
-    -- if str:sub(1, 5) == "rrpc," or str:sub(1, 7) == "config," then
-    --     local res, msg = pcall(create.userapi, str)
-    --     if not res then
-    --         log.error("远程查询的API错误:", msg)
-    --     end
-    --     if dtu.convert == 0 and upprotFnc then -- 转换为用户自定义报文
-    --         res, msg = pcall(upprotFnc, msg)
-    --         if not res then
-    --             log.error("数据流模版错误:", msg)
-    --         end
-    --     end
-    --    sys.publish("NET_SENT_RDY_" .. uid, msg)
-    -- elseif dtu.convert == 1 then -- 转换HEX String
-    --     --sys.publish("NET_RECV_WAIT_" .. uid, uid, (data:fromHex()))
-    --     str=str:fromHex()
-    -- elseif dtu.convert == 0 and dwprotFnc then -- 转换用户自定义报文
-    --     local res, msg = pcall(dwprotFnc, str)
-    --     if not res or not msg then
-    --         log.error("数据流模版错误:", msg)
-    --     else
-    --         -- sys.publish("NET_RECV_WAIT_" .. uid, uid, res and msg or str)
-    --         str=res and msg or str
-    --     end
-    -- else -- 默认不转换
-    --     log.info("走到这里了呀不转换",str)
-    --     -- sys.publish("NET_RECV_WAIT_" .. uid, uid, str)
-    -- end
     if str ~= true then
         for i = 1, #str, SENDSIZE do
             table.insert(writeBuff[uid], str:sub(i, i + SENDSIZE - 1))
@@ -415,9 +388,9 @@ local function read(uid, idx)
             end
         end
         local t = str:match("(.+)\r\n") and str:match("(.+)\r\n"):split(',') or str:split(',')
-        if not socket.isReady() then write(uid, "NET_NORDY\r\n") return end
+        if not mobile.status() ~= 1 then write(uid, "NET_NORDY\r\n") return end
         sys.taskInit(function(t, uid)
-            local code, head, body = http.request(t[2]:upper(), t[3],t[8],nil, jsonstr or t[5], tonumber(t[6]) or 1, t[7])
+            local code, head, body = dtulib.request(t[2]:upper(), t[3],t[8],nil, jsonstr or t[5], tonumber(t[6]) or 1, t[7])
             log.info("uart http response:", body)
             write(uid, body)
         end, t, uid)
@@ -535,16 +508,16 @@ function uart_INIT(i, uconf)
     sys.subscribe("UART_RECV_WAIT_" .. uconf[i][1], read)
     sys.subscribe("UART_SENT_RDY_" .. uconf[i][1], write)
     -- 网络数据写串口延时分帧
-    sys.subscribe("NET_RECV_WAIT_" .. uconf[i][1], function(uid, str,cid)
-        log.info("uid123",uid,str)
+    sys.subscribe("NET_RECV_WAIT_" .. uconf[i][1], function(uid, str)
+        log.info("uid123",uid,str,str:toHex())
         if tonumber(dtu.netReadTime) and tonumber(dtu.netReadTime) > 5 then
             for j = 1, #str, SENDSIZE do
                 table.insert(writeBuff[uid], str:sub(j, j + SENDSIZE - 1))
             end
-            sys.timerStart(sys.publish, tonumber(dtu.netReadTime) or 30, "UART_SENT_RDY_" .. uid, uid, true,cid)
+            sys.timerStart(sys.publish, tonumber(dtu.netReadTime) or 30, "UART_SENT_RDY_" .. uid, uid, true)
         else
-            log.info("uid122",uid,str)
-            sys.publish("UART_SENT_RDY_" .. uid, uid, str,cid)
+            log.info("uid122",uid,str,str:toHex())
+            sys.publish("UART_SENT_RDY_" .. uid, uid, str)
         end
     end)
     -- 485方向控制
@@ -610,7 +583,7 @@ sys.taskInit(function()
             local param = {product_name = _G.PROJECT, param_ver = dtu.param_ver, imei = mobile.imei()}
             code, head, body = dtulib.request("GET", dtu.host,30000,param,nil,1)
         else
-            log.info("dtuURL+++++")
+            log.info("dtuURL+++++",mobile.muid(),mobile.imei())
             url = "http://dtu.openluat.com/api/site/device/" .. mobile.imei() .. "/param?product_name=" .. _G.PROJECT .. "&param_ver=" .. dtu.param_ver       
             code, head, body = dtulib.request("GET", url,30000,nil,nil,1,mobile.imei()..":"..mobile.muid())
         end
