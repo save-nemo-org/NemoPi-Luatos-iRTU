@@ -111,14 +111,35 @@ end
 ---------------------------------------------------------- 用户控制 GPIO 配置 ----------------------------------------------------------
 -- function gpio_set() end
 
--- sys.timerLoopStart(function()
---     local Total_memory, user_memory, Maximum_available_memory = rtos.meminfo()
---     local _, all_fs, user_fs, fs_kb, _ = fs.fsstat("/")
---     log.info("总内存", Total_memory, "当前内存已用", user_memory,
---              "历史最高已使用的内存大小", Maximum_available_memory)
---     log.info("当前文件系统区总内存", all_fs * fs_kb, "已用",
---              user_fs * fs_kb, "剩余可用", all_fs * fs_kb - user_fs * fs_kb) -- 打印打印根分区的信息
--- end, 3000)
+pios = {
+    pio1 = gpio.setup(1, nil, gpio.PULLDOWN),
+    pio2 = gpio.setup(2, nil, gpio.PULLDOWN),
+    pio3 = gpio.setup(3, nil, gpio.PULLDOWN),
+    pio4 = gpio.setup(4, nil, gpio.PULLDOWN),
+    pio5 =gpio.setup(5, nil,gpio.PULLDOWN),
+    pio6 =gpio.setup(6, nil,gpio.PULLDOWN),
+    pio7 =gpio.setup(7, nil,gpio.PULLDOWN),
+    pio8 =gpio.setup(8, nil,gpio.PULLDOWN),
+    pio9 =gpio.setup(9, nil,gpio.PULLDOWN),
+    pio12 =gpio.setup(12, nil,gpio.PULLDOWN),
+    pio13 =gpio.setup(13, nil,gpio.PULLDOWN),
+    pio16 =gpio.setup(16, nil,gpio.PULLDOWN),
+    pio17 =gpio.setup(17, nil,gpio.PULLDOWN),
+    pio19 =gpio.setup(19, nil,gpio.PULLDOWN),
+    pio20 =gpio.setup(20, nil,gpio.PULLDOWN),
+    pio21 =gpio.setup(21, nil,gpio.PULLDOWN),
+    pio22 =gpio.setup(22, nil,gpio.PULLDOWN),
+    pio23 =gpio.setup(23, nil,gpio.PULLDOWN),
+    pio24 =gpio.setup(24, nil,gpio.PULLDOWN),
+    pio25 =gpio.setup(25, nil,gpio.PULLDOWN),
+    pio26 =gpio.setup(26, nil,gpio.PULLDOWN),
+    pio27 =gpio.setup(27, nil,gpio.PULLDOWN),
+    pio28 =gpio.setup(28, nil,gpio.PULLDOWN),
+    pio29 =gpio.setup(29, nil,gpio.PULLDOWN),
+    pio30 =gpio.setup(30, nil,gpio.PULLDOWN),
+    pio31 =gpio.setup(31, nil,gpio.PULLDOWN),
+}
+
 
 -- 重置DTU
 function resetConfig(msg)
@@ -405,16 +426,31 @@ local function read(uid, idx)
             --tulib.restart("网络初始化失败！")
         end
         sys.taskInit(function(uid, prot, ip, port, ssl, timeout, data)
-            local c = prot:upper() == "TCP" and socket.tcp(ssl and ssl:lower() == "ssl") or socket.udp()
-            while not c:connect(ip, port) do sys.wait(2000) end
-            if c:send(data) then
+            local c = prot:upper() 
+            dName="dtu"..uid
+            local netc = socket.create(nil, dName)
+            local isUdp = prot == "TCP" and nil or true
+            local isSsl = ssl and true or nil
+            local rx_buff = zbuff.create(1024)
+            socket.config(netc, nil,isUdp,isSsl)
+            libnet.waitLink(dName, 0, netc)
+            result = libnet.connect(dName, timeout, netc, ip, port)
+            while not result do sys.wait(2000) end
+            local succ, param =libnet.tx(dName, nil, netc, data)
+            if succ then
                 write(uid, "SEND_OK\r\n")
-                local r, s = c:recv(timeout * 1000)
-                if r then write(uid, s) end
+                local result, param = libnet.wait(dName, timeout * 1000, netc)
+                if not result then
+                    log.info("网络异常", result, param) 
+                end
+                local succ, param, _, _ = socket.rx(netc, rx_buff)
+                if succ then 
+                    s=rx_buff:toStr()
+                    write(uid, s) end
             else
                 write(uid, "SEND_ERR\r\n")
             end
-            c:close()
+            socket.close(netc)
         end, uid, s:match("(.-),(.-),(.-),(.-),(.-),(.+)"))
         return
     end
@@ -645,6 +681,38 @@ if uidgps ~= 2 and dtu.uconf and dtu.uconf[2] and tonumber(dtu.uconf[2][1]) == 2
 --     sys.taskInit(tracker.alert, unpack(dtu.gps.fun))
 -- end
 
+---------------------------------------------------------- 预警任务线程 ----------------------------------------------------------
+if dtu.warn and dtu.warn.gpio and #dtu.warn.gpio > 0 then
+    for i = 1, #dtu.warn.gpio do
+        pins.setup(tonumber(dtu.warn.gpio[i][1]:sub(4, -1)), function(msg)
+            if (msg == cpu.INT_GPIO_NEGEDGE and tonumber(dtu.warn.gpio[i][2]) == 1) or (msg == cpu.INT_GPIO_POSEDGE and tonumber(dtu.warn.gpio[i][3]) == 1) then
+                if tonumber(dtu.warn.gpio[i][6]) == 1 then 
+                    log.info("发布一个主题","NET_SENT_RDY_" .. dtu.warn.gpio[i][5], dtu.warn.gpio[i][4]) 
+                    sys.publish("NET_SENT_RDY_" .. dtu.warn.gpio[i][5], dtu.warn.gpio[i][4]) 
+                end
+                if dtu.preset and tonumber(dtu.preset.number) then
+                    if tonumber(dtu.warn.gpio[i][7]) == 1 then sms.send(dtu.preset.number, common.utf8ToGb2312(dtu.warn.gpio[i][4])) end
+                end
+            else
+                for a = 1, #dtu.warn.gpio do
+                    if a~=i and tonumber(dtu.warn.gpio[i][1]:sub(4, -1))==tonumber(dtu.warn.gpio[a][1]:sub(4, -1)) and a<i  then
+                        if (msg == cpu.INT_GPIO_NEGEDGE and tonumber(dtu.warn.gpio[a][2]) == 1) or (msg == cpu.INT_GPIO_POSEDGE and tonumber(dtu.warn.gpio[a][3]) == 1) then
+                            if tonumber(dtu.warn.gpio[a][6]) == 1 then 
+                                --if conf[dtu.warn.gpio[a][5]]
+                                log.info("发布一个主题","NET_SENT_RDY_" .. dtu.warn.gpio[a][5], dtu.warn.gpio[a][4]) 
+                                sys.publish("NET_SENT_RDY_" .. dtu.warn.gpio[a][5], dtu.warn.gpio[a][4]) 
+                            end
+                            if dtu.preset and tonumber(dtu.preset.number) then
+                                if tonumber(dtu.warn.gpio[a][7]) == 1 then sms.send(dtu.preset.number, common.utf8ToGb2312(dtu.warn.gpio[a][4])) end
+                                
+                            end
+                        end                
+                    end
+                end
+            end
+        end, pio.PULLUP)
+    end
+end
 
 
 local function adcWarn(adcid, und, lowv, over, highv, diff, msg, id, sfreq, upfreq, net, note, tel)
@@ -707,6 +775,7 @@ end
 sys.timerLoopStart(function()
     log.info("mem.lua", rtos.meminfo())
     log.info("mem.sys", rtos.meminfo("sys"))
+    log.info("VERSION",_G.VERSION)
  end, 3000)
 
 return {setLocation = setLocation, gpio_set = gpio_set}
