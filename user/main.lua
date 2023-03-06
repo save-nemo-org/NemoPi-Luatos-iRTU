@@ -1,8 +1,8 @@
 -- LuaTools需要PROJECT和VERSION这两个信息
-PROJECT = "irtu"
+PROJECT = "beta_irtu"
 VERSION = "1.0.0"
 -- PRODUCT_KEY = "DPVrZXiffhEUBeHOUwOKTlESam3aXvnR"
-PRODUCT_KEY = "t1GXEfOaS5Ooqy2bF8f8q6bDsxRI5mq1"
+PRODUCT_KEY = "z1OoDfAP2LDtOStiMQTVDfXO6RkrWeBG" --618DTU测试版本的key固定为它
 
 log.info("main", PROJECT, VERSION)
 
