@@ -590,28 +590,34 @@ local alikey = "/alikey.cnf"
 -- 处理表的RFC3986编码
 
 local function getOneSecret(RegionId, ProductKey, ProductSecret)
-    -- if io.exists(alikey) then
-    --     local dat, res, err = json.decode(io.readFile(alikey))
-    --     if res then
-    --         return dat.data.deviceName, dat.data.deviceSecret
-    --     end
-    -- end
+    if io.exists(alikey) then
+        local dat, res, err = json.decode(io.readFile(alikey))
+        if res then
+            return dat.data.deviceName, dat.data.deviceSecret
+        end
+    end
 
-    local random = os.time()
+    local random = 2717
+    log.info("RANDOM",random)
     local data = "deviceName" .. mobile.imei() .. "productKey" .. ProductKey .. "random" .. random
+    log.info("DATA",data)
     local sign = crypto.hmac_md5(data, ProductSecret)
+    log.info("SIGN",sign)
     local body = "productKey=" .. ProductKey .. "&deviceName=" .. mobile.imei() .. "&random=" .. random .. "&sign=" ..
                      sign .. "&signMethod=HmacMD5"
+    log.info("BODY",body)
     for i = 1, 3 do
-        local code, head, body = http.request("POST",
-            "https://iot-auth." .. RegionId .. ".aliyuncs.com/auth/register/device", nil, body)
+        local code, head, body = dtulib.request("POST",
+            "https://iot-auth." .. RegionId .. ".aliyuncs.com/auth/register/device",10000, nil, body,1)
         if tonumber(code) == 200 and body then
+            log.info("进到这来了1",code)
             local dat, result, errinfo = json.decode(body)
             if result and dat.message and dat.data then
                 io.writeFile(alikey, body)
                 return dat.data.deviceName, dat.data.deviceSecret
             end
         else
+            log.info("进到这里面了哦",code)
             if io.exists(alikey) then
                 local dat, res, err = json.decode(io.readFile(alikey))
                 if res then
@@ -968,9 +974,10 @@ function connect(pios, conf, reg, convert, passon, upprot, dwprot, webProtect, p
             sys.taskInit(oneNet_mqtt, k, pios, reg, convert, passon, upprot, dwprot, unpack(v, 3))
         elseif v[1] and v[1]:upper() == "ALIYUN" then
             log.warn("----------------------- Aliyun iot is start! --------------------------------------")
-            while not ntp.isEnd() do
-                sys.wait(1000)
-            end
+            -- while not ntp.isEnd() do
+            --     sys.wait(1000)
+            -- end
+            socket.sntp()
             if v[2]:upper() == "OTOK" then -- 一型一密
                 sys.taskInit(aliyunOtok, k, pios, reg, convert, passon, upprot, dwprot, unpack(v, 3))
             elseif v[2]:upper() == "OMOK" then -- 一机一密
@@ -987,9 +994,10 @@ function connect(pios, conf, reg, convert, passon, upprot, dwprot, webProtect, p
             log.info("passon", passon)
             log.info("upprot", upprot)
             log.info("dwprot", dwprot)
-            while not ntp.isEnd() do
-                sys.wait(1000)
-            end
+            -- while not ntp.isEnd() do
+            --     sys.wait(1000)
+            -- end
+            socket.sntp()
             sys.taskInit(txiot, k, pios, reg, convert, passon, upprot, dwprot, unpack(v, 2))
         elseif v[1] and v[1]:upper() == "TXIOTNEW" then
             log.warn("----------------------- tencent iot is start! --------------------------------------")
@@ -1002,9 +1010,10 @@ function connect(pios, conf, reg, convert, passon, upprot, dwprot, webProtect, p
             log.info("passon", passon)
             log.info("upprot", upprot)
             log.info("dwprot", dwprot)
-            while not ntp.isEnd() do
-                sys.wait(1000)
-            end
+            -- while not ntp.isEnd() do
+            --     sys.wait(1000)
+            -- end
+            socket.sntp()
             sys.taskInit(dev_txiotnew, k, pios, reg, convert, passon, upprot, dwprot, unpack(v, 2))
         end
     end

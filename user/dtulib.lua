@@ -34,13 +34,30 @@ function merge(...)
     return origin
 end
 
+
 local Content_type = {'application/x-www-form-urlencoded', 'application/json', 'application/octet-stream'}
+
+--- 处理表的url编码
+-- @table query: 需要转码的查询表
+-- @return string: 经过urlEncode转换后的字符串
+-- @usage local q = table.urlEncode({a="1",b="2"})
+function urlEncode(query)
+    local msg = {}
+    for k, v in pairs(query) do
+        if type(k) == "number" then
+            table.insert(msg, tostring(v):urlEncode())
+        else
+            table.insert(msg, k:urlEncode() .. "=" .. tostring(v):urlEncode())
+        end
+    end
+    return table.concat(msg, "&")
+end
 
 -- 处理表的url编码
 function urlencodeTab(params)
     local msg = {}
     for k, v in pairs(params) do
-        table.insert(msg, string.urlEncode(k) .. '=' .. string.urlEncode(v))
+        table.insert(msg,  urlEncode(k) .. '=' .. urlEncode(v))
         table.insert(msg, '&')
     end
     table.remove(msg)
@@ -105,6 +122,7 @@ function request(method, url, timeout, params, data, ctype, basic, head, cert, f
     -- -- 处理查询字符串
     -- if params then path = path .. '?' .. (type(params) == 'table' and urlencodeTab(params) or params) end
     -- 处理HTTP协议body部分的数据
+    log.info("真的是1吗",ctype)
     ctype = ctype or 2
     headers['Content-Type'] = Content_type[ctype]
     if ctype == 1 and type(data) == 'table' then
