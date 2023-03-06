@@ -6,6 +6,8 @@ dtulib={}
 function restart(r)
     assert(r and r ~= "", "sys.restart cause null")
     log.warn("sys.restart",r)
+    mobile.flymode(0, true)--重启前进入下飞行模式，避免重启前上次模块和基站的心跳没断导致下次驻网不上
+    mobile.flymode(1, true)
     rtos.reboot()
 end
 --- table.merge(...) 合并多个表格
