@@ -34,6 +34,26 @@ local function netCB(msg)
 	log.info("未处理消息", msg[1], msg[2], msg[3], msg[4])
 end
 
+--- 用户串口和远程调用的API接口
+-- @string str：执行API的命令字符串
+-- @retrun str : 处理结果字符串
+function create.userapi(str)
+    local t = str:match("(.+)\r\n") and str:match("(.+)\r\n"):split(',') or str:split(',')
+    local first = table.remove(t, 1)
+    local second = table.remove(t, 1) or ""
+    log.info("FIRST",first)
+    log.info("SECONDE",second)
+    log.info("THREE",three)
+    if tonumber(second) and tonumber(second) > 0 and tonumber(second) < 8 then
+        log.info("进到这里了1")
+        return cmd[first]["pipe"](t, second) .. "\r\n"
+    elseif cmd[first][second] then
+        log.info("进到这里了2")
+        return cmd[first][second](t, str) .. "\r\n"
+    else
+        return "ERROR\r\n"
+    end
+end
 ---------------------------------------------------------- DTU的网络任务部分 ----------------------------------------------------------
 local function conver(str)
     if str:match("function(.+)end") then
@@ -352,10 +372,12 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
         sys.timerLoopStart(sys.publish, timeout * 1000, "AUTO_SAMPL_" .. uid)
     end
     if type(sub) == "string" then
+        log.info("SUB11",sub)
         sub = listTopic(sub, addImei)
         local topics = {}
         for i = 1, #sub do
             topics[sub[i]] = tonumber(sub[i + 1]) or qos
+            log.info("TOPICS",topics[sub[i]])
         end
         sub = topics
     end
@@ -603,8 +625,7 @@ local function getOneSecret(RegionId, ProductKey, ProductSecret)
     log.info("DATA",data)
     local sign = crypto.hmac_md5(data, ProductSecret)
     log.info("SIGN",sign)
-    local body = "productKey=" .. ProductKey .. "&deviceName=" .. mobile.imei() .. "&random=" .. random .. "&sign=" ..
-                     sign .. "&signMethod=HmacMD5"
+    local body = "productKey=" .. ProductKey .. "&deviceName=" .. mobile.imei() .. "&random=" .. random .. "&sign=" ..sign .. "&signMethod=HmacMD5"
     log.info("BODY",body)
     for i = 1, 3 do
         local code, head, body = dtulib.request("POST",
@@ -679,106 +700,107 @@ local function aliyunOtok(cid, pios, reg, convert, passon, upprot, dwprot, keepA
         deviceName, ver, cleansession, qos, uid, sub, pub)
 end
 
----------------------------------------------------------- 腾讯IOT云 ----------------------------------------------------------
+-- ---------------------------------------------------------- 腾讯IOT云 ----------------------------------------------------------
 
-function txiot(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive, timeout, Region, ProductId, SecretId,
-    SecretKey, sub, pub, cleansession, qos, uid)
-    if not io.exists("/qqiot.dat") then
-        local version = "2018-06-14"
-        local data = {
-            ProductId = ProductId,
-            DeviceName = mobile.imei()
-        }
-        local timestamp = os.time()
-        local head = {
-            ["X-TC-Action"] = "CreateDevice",
-            ["X-TC-Timestamp"] = timestamp,
-            ["X-TC-Version"] = "2018-06-14",
-            ["X-TC-Region"] = (not Region or Region == "") and "ap-guangzhou" or Region,
-            ["Content-Type"] = "application/json",
-            Authorization = "TC3-HMAC-SHA256 Credential=" .. SecretId .. "/"
-        }
-        local SignedHeaders = "content-type;host"
-        local CanonicalRequest = "POST\n/\n\ncontent-type:application/json\nhost:iotcloud.tencentcloudapi.com\n\n" ..
-                                     SignedHeaders .. "\n" .. crypto.sha256(json.encode(data)):lower()
-        local c = os.date("!*t")
-        local date = string.format("%04d-%02d-%02d", c.year, c.month, c.day)
-        local CredentialScope = date .. "/iotcloud/tc3_request"
-        local StringToSign = "TC3-HMAC-SHA256\n" .. timestamp .. "\n" .. CredentialScope .. "\n" ..
-                                 crypto.sha256(CanonicalRequest):lower()
-        local SecretDate = crypto.hmac_sha256(date, "TC3" .. SecretKey):fromHex()
-        local SecretService = crypto.hmac_sha256("iotcloud", SecretDate):fromHex()
-        local SecretSigning = crypto.hmac_sha256("tc3_request", SecretService):fromHex()
-        local Signature = crypto.hmac_sha256(StringToSign, SecretSigning):lower()
-        head.Authorization = head.Authorization .. CredentialScope .. ",SignedHeaders=" .. SignedHeaders ..
-                                 ",Signature=" .. Signature
-        for i = 1, 3 do
-            local code, head, body = http.request("POST", "https://iotcloud.tencentcloudapi.com", head, data)
-            if body then
-                local dat, result, errinfo = json.decode(body)
-                if result then
-                    if not dat.Response.Error then
-                        io.writeFile("/qqiot.dat", body)
-                        -- log.info("腾讯云注册设备成功:", body)
-                    else
-                        log.info("腾讯云注册设备失败:", body)
-                    end
-                    break
-                end
-            end
-            sys.wait(5000)
-        end
-    end
-    if not io.exists("/qqiot.dat") then
-        log.warn("腾讯云设备注册失败或不存在设备信息!")
-        return
-    end
-    if type(sub) ~= "string" or sub == "" then
-        sub = ProductId .. "/" .. mobile.imei() .. "/control"
-    else
-        sub = listTopic(sub, "addImei", ProductId, mobile.imei())
-        local topics = {}
-        for i = 1, #sub do
-            topics[sub[i]] = tonumber(sub[i + 1]) or qos
-        end
-        sub = topics
-    end
-    if type(pub) ~= "string" or pub == "" then
-        pub = ProductId .. "/" .. mobile.imei() .. "/event"
-    else
-        pub = listTopic(pub, "addImei", ProductId, mobile.imei())
-    end
-    local dat = json.decode(io.readFile("/qqiot.dat"))
-    local clientID = ProductId .. mobile.imei()
-    local connid = rtos.tick()
-    local expiry = tostring(os.time() + 3600)
-    local usr = string.format("%s;12010126;%s;%s", clientID, connid, expiry)
-    local raw_key = crypto.base64_decode(dat.Response.DevicePsk)
-    local pwd = crypto.hmac_sha256(usr, raw_key):lower() .. ";hmacsha256"
-    local addr, port = "iotcloud-mqtt.gz.tencentdevices.com", 1883
-    mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive, timeout, addr, port, usr, pwd, cleansession,
-        sub, pub, qos, retain, uid, clientID, addImei, ssl, will, "1")
-end
+-- function txiot(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive, timeout, Region, ProductId, SecretId,
+--     SecretKey, sub, pub, cleansession, qos, uid)
+--     if not io.exists("/qqiot.dat") then
+--         local version = "2018-06-14"
+--         local data = {
+--             ProductId = ProductId,
+--             DeviceName = mobile.imei()
+--         }
+--         local timestamp = os.time()
+--         local head = {
+--             ["X-TC-Action"] = "CreateDevice",
+--             ["X-TC-Timestamp"] = timestamp,
+--             ["X-TC-Version"] = "2018-06-14",
+--             ["X-TC-Region"] = (not Region or Region == "") and "ap-guangzhou" or Region,
+--             ["Content-Type"] = "application/json",
+--             Authorization = "TC3-HMAC-SHA256 Credential=" .. SecretId .. "/"
+--         }
+--         local SignedHeaders = "content-type;host"
+--         local CanonicalRequest = "POST\n/\n\ncontent-type:application/json\nhost:iotcloud.tencentcloudapi.com\n\n" ..
+--                                      SignedHeaders .. "\n" .. crypto.sha256(json.encode(data)):lower()
+--         local c = os.date("!*t")
+--         local date = string.format("%04d-%02d-%02d", c.year, c.month, c.day)
+--         local CredentialScope = date .. "/iotcloud/tc3_request"
+--         local StringToSign = "TC3-HMAC-SHA256\n" .. timestamp .. "\n" .. CredentialScope .. "\n" ..
+--                                  crypto.sha256(CanonicalRequest):lower()
+--         local SecretDate = crypto.hmac_sha256(date, "TC3" .. SecretKey):fromHex()
+--         local SecretService = crypto.hmac_sha256("iotcloud", SecretDate):fromHex()
+--         local SecretSigning = crypto.hmac_sha256("tc3_request", SecretService):fromHex()
+--         local Signature = crypto.hmac_sha256(StringToSign, SecretSigning):lower()
+--         head.Authorization = head.Authorization .. CredentialScope .. ",SignedHeaders=" .. SignedHeaders ..
+--                                  ",Signature=" .. Signature
+--         for i = 1, 3 do
+--             local code, head, body = http.request("POST", "https://iotcloud.tencentcloudapi.com", head, data)
+--             if body then
+--                 local dat, result, errinfo = json.decode(body)
+--                 if result then
+--                     if not dat.Response.Error then
+--                         io.writeFile("/qqiot.dat", body)
+--                         -- log.info("腾讯云注册设备成功:", body)
+--                     else
+--                         log.info("腾讯云注册设备失败:", body)
+--                     end
+--                     break
+--                 end
+--             end
+--             sys.wait(5000)
+--         end
+--     end
+--     if not io.exists("/qqiot.dat") then
+--         log.warn("腾讯云设备注册失败或不存在设备信息!")
+--         return
+--     end
+--     if type(sub) ~= "string" or sub == "" then
+--         sub = ProductId .. "/" .. mobile.imei() .. "/control"
+--     else
+--         sub = listTopic(sub, "addImei", ProductId, mobile.imei())
+--         local topics = {}
+--         for i = 1, #sub do
+--             topics[sub[i]] = tonumber(sub[i + 1]) or qos
+--         end
+--         sub = topics
+--     end
+--     if type(pub) ~= "string" or pub == "" then
+--         pub = ProductId .. "/" .. mobile.imei() .. "/event"
+--     else
+--         pub = listTopic(pub, "addImei", ProductId, mobile.imei())
+--     end
+--     local dat = json.decode(io.readFile("/qqiot.dat"))
+--     local clientID = ProductId .. mobile.imei()
+--     local connid = rtos.tick()
+--     local expiry = tostring(os.time() + 3600)
+--     local usr = string.format("%s;12010126;%s;%s", clientID, connid, expiry)
+--     local raw_key = crypto.base64_decode(dat.Response.DevicePsk)
+--     local pwd = crypto.hmac_sha256(usr, raw_key):lower() .. ";hmacsha256"
+--     local addr, port = "iotcloud-mqtt.gz.tencentdevices.com", 1883
+--     mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive, timeout, addr, port, usr, pwd, cleansession,
+--         sub, pub, qos, retain, uid, clientID, addImei, ssl, will, "1")
+-- end
 ---------------------------------------------------------------------------------------------------------------------------------------------------
-local function serBack(body, head)
-    -- body
-    log.info("testHttp.serBack", head, body)
-    local dat, result, errinfo = json.decode(body)
-    if result then
-        if dat.code == 0 then
-            io.writeFile("/qqiot.dat", body)
-            log.info("腾讯云注册设备成功:", body)
-        else
-            log.info("腾讯云设备注册失败:", body)
-        end
-        enrol_end = true
-    end
-end
+-- local function serBack(body, head)
+--     -- body
+--     log.info("testHttp.serBack", head, body)
+--     local dat, result, errinfo = json.decode(body)
+--     if result then
+--         if dat.code == 0 then
+--             io.writeFile("/qqiot.dat", body)
+--             log.info("腾讯云注册设备成功:", body)
+--         else
+--             log.info("腾讯云设备注册失败:", body)
+--         end
+--         enrol_end = true
+--     end
+-- end
 
 function dev_txiotnew(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive, timeout, Region, deviceName,
     ProductId, ProductSecret, sub, pub, cleansession, qos, uid)
     enrol_end = false
     if not io.exists("/qqiot.dat") then
+        log.info("确实没有文件了")
         local nonce = math.random(1, 100)
         -- local version = "2018-06-14"
         -- local data = {ProductId = ProductId, DeviceName = misc.getImei()}
@@ -817,19 +839,23 @@ function dev_txiotnew(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive
         while not enrol_end do
             sys.wait(100)
         end
+    else
+        log.info("有文件啊")
     end
     if not io.exists("/qqiot.dat") then
         log.warn("腾讯云设备注册失败或不存在设备信息!")
         return
     end
+    
     local dat = json.decode(io.readFile("/qqiot.dat"))
     local clientID = ProductId .. deviceName -- 生成 MQTT 的 clientid 部分, 格式为 ${productid}${devicename}
     local connid = math.random(10000, 99999)
     local expiry = tostring(os.time() + 3600)
     local usr = string.format("%s;12010126;%s;%s", clientID, connid, expiry) -- 生成 MQTT 的 username 部分, 格式为 ${clientid};${sdkappid};${connid};${expiry}
-    local payload = json.decode(crypto.aes_decrypt("CBC", "ZERO", crypto.base64_decode(dat.payload),
+    local payload = json.decode(crypto.cipher_decrypt("AES-128-CBC", "ZERO", crypto.base64_decode(dat.payload),
         string.sub(ProductSecret, 1, 16), "0000000000000000"))
     local pwd
+    log.info("JSONPAYLOAD",payload)
     log.info("CLIENTID", clientID)
     log.info("user", usr)
     if payload.encryptionType == 2 then
@@ -847,7 +873,7 @@ function dev_txiotnew(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive
     local addr, port = ProductId .. ".iotcloud.tencentdevices.com", 1883
     log.info("ADDR", addr)
     if type(sub) ~= "string" or sub == "" then
-        sub = ProductId .. "/" .. mobilie.imei() .. "/control"
+        sub = ProductId .. "/" .. mobile.imei() .. "/control"
     else
         sub = listTopic(sub, "addImei", ProductId, mobile.imei())
         local topics = {}
@@ -865,7 +891,7 @@ function dev_txiotnew(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive
     log.info("pub", pub)
     log.info("qos", qos)
     mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive, timeout, addr, port, usr, pwd, cleansession,
-        sub, pub, qos, retain, uid, clientID, addImei, ssl, will, "1", cert)
+        sub, pub, qos, retain, uid, clientID, "addImei", ssl, will, "1", cert)
     log.info("腾讯云新版连接方式开启")
 end
 
@@ -983,22 +1009,22 @@ function connect(pios, conf, reg, convert, passon, upprot, dwprot, webProtect, p
             elseif v[2]:upper() == "OMOK" then -- 一机一密
                 sys.taskInit(aliyunOmok, k, pios, reg, convert, passon, upprot, dwprot, unpack(v, 3))
             end
-        elseif v[1] and v[1]:upper() == "TXIOT" then
-            log.warn("----------------------- tencent iot is start! --------------------------------------")
-            log.info("UNPACK1", unpack(v))
-            log.info("UNPACK", unpack(v, 2))
-            log.info("KKKK", k)
-            log.info("PIOS", pios)
-            log.info("REG", reg)
-            log.info("convert", convert)
-            log.info("passon", passon)
-            log.info("upprot", upprot)
-            log.info("dwprot", dwprot)
-            -- while not ntp.isEnd() do
-            --     sys.wait(1000)
-            -- end
-            socket.sntp()
-            sys.taskInit(txiot, k, pios, reg, convert, passon, upprot, dwprot, unpack(v, 2))
+        -- elseif v[1] and v[1]:upper() == "TXIOT" then
+        --     log.warn("----------------------- tencent iot is start! --------------------------------------")
+        --     log.info("UNPACK1", unpack(v))
+        --     log.info("UNPACK", unpack(v, 2))
+        --     log.info("KKKK", k)
+        --     log.info("PIOS", pios)
+        --     log.info("REG", reg)
+        --     log.info("convert", convert)
+        --     log.info("passon", passon)
+        --     log.info("upprot", upprot)
+        --     log.info("dwprot", dwprot)
+        --     -- while not ntp.isEnd() do
+        --     --     sys.wait(1000)
+        --     -- end
+        --     socket.sntp()
+        --     sys.taskInit(txiot, k, pios, reg, convert, passon, upprot, dwprot, unpack(v, 2))
         elseif v[1] and v[1]:upper() == "TXIOTNEW" then
             log.warn("----------------------- tencent iot is start! --------------------------------------")
             log.info("UNPACK1", unpack(v))

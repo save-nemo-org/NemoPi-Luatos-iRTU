@@ -86,13 +86,11 @@ end
 -- @usage local c, h, b = httpv2.request(url, method, headers, body)
 -- @usage local r, e  = httpv2.request("http://wrong.url/ ")
 function request(method, url, timeout, params, data, ctype, basic, head, cert, fnc)
-    local response_header, response_code, response_body = {}
     local _, idx, offset, ssl, auth, https, host, port, path
     local headers = {
         ['User-Agent'] = 'Mozilla/4.0',
         ['Accept'] = '*/*',
         ['Accept-Language'] = 'zh-CN,zh,cn',
-        ['Content-Type'] = 'application/x-www-form-urlencoded',
         ['Connection'] = 'close',
     }
     if type(head) == "string" then
@@ -104,39 +102,22 @@ function request(method, url, timeout, params, data, ctype, basic, head, cert, f
     elseif type(head) == "table" then
         merge(headers, head)
     end
-     -- 处理url的协议头和鉴权
-     _, offset, https = url:find("^(%a+)://")
-     _, idx, auth = url:find("(.-:.-)@", (offset or 0) + 1)
-     offset = idx or offset
-     -- 对host:port整形
-     if url:match("^[^/]+:(%d+)", (offset or 0) + 1) then
-        _, offset, host, port = url:find("^([^/]+):(%d+)", (offset or 0) + 1)
-    elseif url:find("(.-)/", (offset or 0) + 1) then
-        _, offset, host = url:find("(.-)/", (offset or 0) + 1)
-        offset = offset - 1
-    else
-        offset, host = #url, url:sub((offset or 0) + 1, -1)
-    end
-    if not headers.Host then headers["Host"] = host end
-    port = port or (https == "https" and 443 or 80)
-    path = url:sub(offset + 1, -1)
-    path = path == "" and "/" or path
-    -- -- 处理查询字符串
-    -- if params then path = path .. '?' .. (type(params) == 'table' and urlencodeTab(params) or params) end
+
+    _, idx, auth = url:find("(.-:.-)@", (offset or 0) + 1)
+    offset = idx or offset
     -- 处理HTTP协议body部分的数据
     log.info("真的是1吗",ctype)
     ctype = ctype or 2
     headers['Content-Type'] = Content_type[ctype]
+    log.info("这里是什么呢",headers['Content-Type'])
     if ctype == 1 and type(data) == 'table' then
-        data = urlencodeTab(data)
-        headers['Content-Length'] = #data or 0
+        data = urlencodeTab(data)    
+        log.info("进到1里面了")
     elseif ctype == 2 and data ~= nil then
         data = type(data) == 'string' and data or (type(data) == 'table' and json.encode(data)) or ""
-        headers['Content-Length'] = #data or 0
     elseif ctype == 3 and type(data) == 'string' then
-        headers['Content-Length'] = io.fileSize(data) or 0
     elseif data and type(data) == "string" then
-        headers['Content-Length'] = #data or 0
+        log.info("进到elseif里面了")
     end
     -- 处理HTTP Basic Authorization 验证
     if auth then
@@ -147,8 +128,11 @@ function request(method, url, timeout, params, data, ctype, basic, head, cert, f
     -- 处理headers部分
     local str = ""
     for k, v in pairs(headers) do str = str .. k .. ": " .. v .. "\r\n" end
-
-    return http.request(method,url,headers,data,{timeout=30000}).wait()
+    log.info("URL",url)
+    for k, v in pairs(headers) do log.info("k",k,v) end
+    log.info("DATA11",data)
+    log.info("method",method)
+    return http.request(method,url,headers,data,{timeout=timeout}).wait()
 end
 
 return{
