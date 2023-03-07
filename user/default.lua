@@ -425,9 +425,9 @@ local function read(uid, idx)
             write(uid, "NET_NORDY\r\n")
             --tulib.restart("网络初始化失败！")
         end
-        sys.taskInit(function(uid, prot, ip, port, ssl, timeout, data)
+        local dName = "dtu"..uid
+        sys.taskInitEx(function(uid, prot, ip, port, ssl, timeout, data)
             local c = prot:upper() 
-            dName="dtu"..uid
             local netc = socket.create(nil, dName)
             local isUdp = prot == "TCP" and nil or true
             local isSsl = ssl and true or nil
@@ -451,7 +451,7 @@ local function read(uid, idx)
                 write(uid, "SEND_ERR\r\n")
             end
             socket.close(netc)
-        end, uid, s:match("(.-),(.-),(.-),(.-),(.-),(.+)"))
+        end, dName, function() end, uid, s:match("(.-),(.-),(.-),(.-),(.-),(.+)"))
         return
     end
     -- 添加设备识别码
