@@ -1,8 +1,8 @@
 -- LuaTools需要PROJECT和VERSION这两个信息
-PROJECT = "beta_irtu"
-VERSION = "1.0.0"
--- PRODUCT_KEY = "DPVrZXiffhEUBeHOUwOKTlESam3aXvnR"
-PRODUCT_KEY = "z1OoDfAP2LDtOStiMQTVDfXO6RkrWeBG" --618DTU测试版本的key固定为它
+PROJECT = "test_iRTU"
+VERSION = "1.0.4"
+
+PRODUCT_KEY = "0LkZx9Kn3tOhtW7uod48xhilVNrVsScV" --618DTU测试版本的key固定为它
 
 log.info("main", PROJECT, VERSION)
 
@@ -10,7 +10,14 @@ log.info("main", PROJECT, VERSION)
 _G.sys = require("sys")
 _G.sysplus = require("sysplus")
 
---db = require("db")
+require "libnet"
+require "libfota"
+require "lbsLoc"
+
+collectgarbage()
+collectgarbage()
+
+db = require("db")
 
 --添加硬狗防止程序卡死
 if wdt then
@@ -20,6 +27,11 @@ end
 ver = rtos.bsp()
 
 default = require "default"
+
+collectgarbage()
+collectgarbage()
+-- log.info("mem.lua", rtos.meminfo())
+-- log.info("mem.sys", rtos.meminfo("sys"))
 
 -- 用户代码已结束---------------------------------------------
 -- 结尾总是这一句

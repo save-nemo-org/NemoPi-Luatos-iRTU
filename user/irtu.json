@@ -11,6 +11,8 @@
     "plate": 0,
     "reg": 0,
     "convert": 0,
+    "protectContent":[0,0,0,0,0,0,0],
+    "webProtect":"1",
     "uconf": [
         [
             1,
@@ -18,7 +20,8 @@
             8,
             2,
             0,
-            "pio19"
+            "pio19",
+            0
         ],
         [],
         []

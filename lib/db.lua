@@ -50,6 +50,7 @@ function serializeio(file, o)
 end
 
 function new(path)
+    log.error("o.path111",path)
     if path == nil then
         log.error("db.new:", "Empty path!")
         return nil
@@ -58,8 +59,11 @@ function new(path)
     -- 烧录时的只读文件新建文件名
     local o = {path = io.exists(back) and back or path}
     if io.exists(o.path) then
+        log.error("o.path",o.path)
         local res, val = pcall(dofile, o.path)
         if res then
+            -- local c=io.readFile(o.path)
+            -- log.info("c的值是",c)
             o.sheet = type(val) == "table" and val or json.decode(val)
         else
             log.error("db.new:", "Irregular data format!")
@@ -79,6 +83,7 @@ end
 -- @usage db:select("msg","vbat")
 function db:select(key, ...)
     local o = {self.sheet[key]}
+    local arg= {...}
     for _, k in ipairs(arg) do
         table.insert(o, self.sheet[k])
     end
@@ -88,7 +93,6 @@ end
 -- @return nil
 -- @usage db:serialize()
 function db:serialize()
-    log.info("进来serialize")
     local file = io.open(self.path, "w+b")
     if not file then
         self.path = "/" .. self.path:match("([^/]+)$") .. ".bak"
@@ -150,18 +154,14 @@ end
 -- @return table or json string
 -- @usage local t = getSheet()
 function db:import(sheet)
-    log.info("到这里了")
     if type(sheet) == "string" then
         self.sheet = json.decode(sheet)
-        log.info("到string了")
     elseif type(sheet) == "table" then
         self.sheet = sheet
-        log.info("到table了")
     else
         log.info("db:import error!", "sheet type is error!")
         return
     end
-    log.info("到这没了")
     self:serialize()
 end
 --- 导出数据表
@@ -185,7 +185,7 @@ function remove(o, ...)
     end
 end
 
-return {
+return  {
     new=new,
     remove=remove
 }

@@ -5,6 +5,7 @@ libfota=require"libfota"
 db=require "db"
 create =require "create"
 dtulib=require "dtulib"
+local lbsLoc = require("lbsLoc")
 
 
 -- 串口缓冲区最大值
@@ -20,7 +21,8 @@ local startTime = {0, 0, 0}
 -- 定时采集任务缓冲区
 local sendBuff = {{}, {}, {}, {}}
 -- 基站定位坐标
-lbs = {}
+local lbs = {lat, lng}
+local gpsUartId=2
 -- 配置文件
 local dtu = {
     defchan = 1, -- 默认监听通道
@@ -49,9 +51,11 @@ local dtu = {
     conf = {{}, {}, {}, {}, {}, {}, {}}, -- 用户通道参数
     preset = {number = "", delay = 1, smsword = "SMS_UPDATE"}, -- 用户预定义的来电电话,延时时间,短信关键字
     uconf = {
-        {1, 115200, 8, 1,  uart.None},
-        {2, 115200, 8, 1,  uart.None},
-        {3, 115200, 8, 1,  uart.None},
+        {1, 115200, 8, 1,  uart.None,1,18,0},
+        {1, 115200, 8, 1,  uart.None,1,18,0},
+        -- {1, 115200, 8, 1,  uart.None},
+        -- {1, 115200, 8, 1,  uart.None},
+        -- {3, 115200, 8, 1,  uart.None},
     }, -- 串口配置表
     gps = {
         fun = {"", "115200", "0", "5", "1", "json", "100", ";", "60"}, -- 用户捆绑GPS的串口,波特率，功耗模式，采集间隔,采集方式支持触发和持续, 报文数据格式支持 json 和 hex，缓冲条数,分隔符,状态报文间隔
@@ -83,7 +87,8 @@ local function autoSampl(uid, t)
         for i = 2, #t do
             local str = t[i]:match("function(.+)end")
             if not str then
-                if t[i] ~= "" then write(uid, (t[i]:fromHex())) end
+                if t[i] ~= "" then 
+                    write(uid, (dtulib.fromHexnew(t[i]))) end
             else
                 local res, msg = pcall(loadstring(str))
                 if res then
@@ -100,14 +105,243 @@ local sheet = cfg:export()
 -- log.info("用户脚本文件:", cfg:export("string"))
 if type(sheet) == "table" and sheet.uconf then
     dtu = sheet
-    if dtu.apn and dtu.apn[1] and dtu.apn[1] ~= "" then link.setAPN(unpack(dtu.apn)) end
+    if dtu.apn and dtu.apn[1] and dtu.apn[1] ~= "" then mobile.apn(nil,nil,dtu.apn[1],dtu.apn[2],dtu.apn[3]) end
     if dtu.cmds and dtu.cmds[1] and tonumber(dtu.cmds[1][1]) then sys.taskInit(autoSampl, 1, dtu.cmds[1]) end
     if dtu.cmds and dtu.cmds[2] and tonumber(dtu.cmds[2][1]) then sys.taskInit(autoSampl, 2, dtu.cmds[2]) end
-    if tonumber(dtu.nolog) ~= 1 then 
-        _G.LOG_LEVEL = log.LOG_INFO
-        log.setLevel("INFO") end
+    if tonumber(dtu.nolog) ~= 1 then
+        log.info("没有日志了哦")
+        log.setLevel("SILENT") 
+    end
 end
 
+-- 解除报警的等待时间秒,GPS打开的起始时间utc秒
+local clearTime, gpsstartTime = 300, 0
+-- 轨迹消息缓冲区
+-- local trackFile = {{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}
+local trackFile = {}
+-- 传感器数据
+local sens = {
+    vib = false, -- 震动检测
+    acc = false, -- 开锁检测
+    act = false, -- 启动检测
+    chg = false, -- 充电检测
+    und = false, -- 剪线检测
+    wup = false, -- 唤醒检测
+    vcc = 0, -- 电池电压
+}
+local openFlag=false
+--GPS打开功能
+function open(uid,baud,sleep)
+    libgnss.clear()
+    uart.setup(uid, baud)
+    pm.power(pm.GPS, true)
+    libgnss.bind(uid)
+    gpsUartId=uid
+    log.info("----------------------------------- GPS START -----------------------------------")
+    if openFlag then return end
+    openFlag=true
+    tid=sys.timerLoopStart(function()
+        -- log.info("Air800 上报GSP信息", getAllMsg())
+        sys.publish("GPS_MSG_REPORT", libgnss.isFix() and 1 or 0)
+    end, sleep * 1000)
+end
+
+function close()
+    openFlag = false
+    sys.timerStop(tid)
+    pm.power(pm.GPS, false)
+    uart.close(gpsUartId)
+    log.info("----------------------------------- GPS CLOSE -----------------------------------")
+end
+
+--- 获取GPS模块是否处于开启状态
+-- @return boolean result，true表示开启状态，false或者nil表示关闭状态
+-- @usage gps.isOpen()
+function isOpen() return openFlag end
+
+----------------------------------------------------------传感器部分----------------------------------------------------------
+-- 配置GPS用到的IO: led脚，vib震动输入脚，ACC输入脚,内置电池充电状态监视脚,adc通道,分压比
+function sensMonitor(ledio, vibio, accio, chgio, adcid, ratio)
+    -- 点火监测采样队列
+    local powerVolt, adcQue, acc, chg = 0, {0, 0, 0, 0, 0}
+    -- GPS 定位成功指示灯
+    if ledio and pios[ledio] then
+        pios[ledio] = nil
+        local led = gpio.setup(tonumber(ledio:sub(4, -1)), 0)
+        sys.subscribe("GPS_MSG_REPORT", led)
+    end
+    -- 震动传感器检测
+    if vibio and pios[vibio] then
+        gpio.setup(tonumber(vibio:sub(4, -1)), function(msg) if msg == gpio.RISING then sens.vib = true end end, gpio.PULLUP)
+        pios[vibio] = nil
+    end
+    -- ACC开锁检测
+    if accio and pios[accio] then
+        acc = gpio.setup(tonumber(accio:sub(4, -1)), nil, gpio.PULLUP)
+       pios[accio] = nil
+    end
+    -- 内置锂电池充电状态监控脚
+    if chgio and pios[chgio] then
+        chg = gpio.setup(tonumber(chgio:sub(4, -1)), nil, gpio.PULLUP)
+        pios[chgio] = nil
+    end
+    adc.open(tonumber(adcid) or 0)
+    while true do
+        local adcValue, voltValue = adc.read(tonumber(adcid) or 0)
+        if adcValue ~= 0xFFFF or voltValue ~= 0xFFFF then
+            voltValue = voltValue * (tonumber(ratio)) / 3
+            -- 点火检测部分
+            powerVolt = (adcQue[1] + adcQue[2] + adcQue[3] + adcQue[4] + adcQue[5]) / 5
+            table.remove(adcQue, 1)
+            table.insert(adcQue, voltValue)
+            if voltValue + 1500 < powerVolt or voltValue - 1500 > powerVolt then
+                sens.act = true
+            else
+                sens.act = false
+            end
+        end
+        sens.acc, sens.chg = acc and acc() == 0, chg and chg() == 0
+        sens.vcc, sens.und = voltValue, voltValue < 4000
+        sys.wait(1000)
+        sens.vib = false
+    end
+    adc.close(tonumber(adcid) or 0)
+end
+----------------------------------------------------------设备逻辑任务----------------------------------------------------------
+-- 上报设备状态,这里是用户自定义上报报文的顺序的
+-- sta = {"isopen", "vib", "acc", "act", "chg", "und", "volt", "vbat", "csq"}
+-- 远程获取gps的信息。
+function deviceMessage(format)
+    log.info("进到DEVICE里面来了啊")
+    if format:lower() ~= "hex" then
+        return json.encode({
+            sta = {isOpen(),  sens.vib, sens.acc, sens.act, sens.chg, sens.und, sens.vcc, mobile.csq()}
+        })
+    else
+        return pack.pack(">b7IHb", 0x55, isOpen() and 1 or 0, sens.vib and 1 or 0,
+        sens.acc and 1 or 0, sens.act and 1 or 0, sens.chg and 1 or 0, sens.und and 1 or 0, sens.vcc, mobile.csq())
+    end
+end
+
+-- 上传定位信息
+-- [是否有效,经度,纬度,海拔,方位角,速度,载噪比,定位卫星,时间戳]
+-- 用户自定义上报GPS数据的报文顺序
+-- msg = {"isfix", "stamp", "lng", "lat", "altitude", "azimuth", "speed", "sateCno", "sateCnt"},
+function locateMessage(format)
+    local isFix = libgnss.isFix()
+    local a, b, speed = libgnss.getIntLocation()
+    local gsvTable=libgnss.getGsv()
+    local ggaTable=libgnss.getGga()
+    local altitude = ggaTable["altitude"]       --海拔
+    if gsvTable["sats"] then
+        if gsvTable["sats"][1] then
+            if gsvTable["sats"][1]["azimuth"] then
+                azimuth = gsvTable["sats"][1]["azimuth"]
+            else
+                azimuth=0     
+            end
+        else
+            azimuth=0 
+        end
+    else
+        azimuth=0
+    end
+    log.info("AZIMUTH",azimuth)
+    local sateCnt = ggaTable["satellites_tracked"]   --gga的参与定位的卫星数量
+    local rmc = libgnss.getRmc(2)
+    local lat,lng=rmc.lat, rmc.lng
+    log.info("rmc", rmc.lat, rmc.lng)
+    if format:lower() ~= "hex" then
+        return json.encode({msg = {isFix, os.time(), lng, lat, altitude, azimuth, speed, sateCnt}})
+    else
+        return pack.pack(">b2i3H2b3", 0xAA, isFix and 1 or 0, os.time(), lng, lat, altitude, azimuth, speed, sateCnt)
+    end
+end
+
+-- 用户捆绑GPS的串口,波特率，功耗模式，采集间隔,采集方式支持触发和持续, 报文数据格式支持 json 和 hex，缓冲条数,数据分隔符(不包含,),状态报文间隔分钟
+function alert(uid, baud, pwmode, sleep, guard, format, num, sep, interval, cid)
+    uid, baud, num = tonumber(uid), tonumber(baud), tonumber(num) or 0
+    sleep=tonumber(sleep) or 60
+    interval = (tonumber(interval) or 0) * 60000
+    local cnt=0
+    local report = function(format)
+        sys.publish("NET_SENT_RDY_" .. tonumber(cid) or uid, deviceMessage(format)) end
+    while true do
+        -- 布防判断
+        sys.wait(3000)
+        log.info("0---------------------------0", "GPS 任务启动")
+        if not isOpen()  then
+            gpsstartTime = os.time()
+            
+            -- GPS TRACKER 模式
+            open(uid, baud,sleep)
+            -- 布防上报
+            log.info("gps开了+++++++")
+            report(format)
+            log.info("INTERVAL",interval)
+            if interval ~= 0 then
+                sys.timerLoopStart(report, interval, format) end
+        end
+        while isOpen() do
+            log.info("GPSV2open",isOpen())
+            -- 撤防判断
+            -- if os.difftime(os.time(), startTime) > clearTime then
+            --     log.info("进到撤防判断里面来了")
+            --     if guard and sens.vib and sens.acc and sens.act and sens.und and gpsv2.getSpeed() == 0 then
+            --         log.info("关闭rep")
+            --         sys.timerStopAll(report)
+            --         close(uid)
+            --     else
+            --         startTime = os.time()
+            --     end
+            -- end
+            --上报消息
+            if sys.waitUntil("GPS_MSG_REPORT",1000) then
+                log.info("进到这里来了GPS_MSG_REPORT")
+                if num == 0 then
+                    sys.publish("NET_SENT_RDY_" .. tonumber(cid) or uid, locateMessage(format))
+                else
+                    cnt = cnt < num and cnt + 1 or 0
+                    table.insert(trackFile, locateMessage(format))
+                    if cnt == 0 then 
+                        sys.publish("NET_SENT_RDY_" .. tonumber(cid) or uid, table.concat(trackFile, sep)) 
+                        trackFile={}
+                    end     
+                end
+            else
+                if not isOpen() then
+                break
+                end
+            end
+            sys.wait(100)
+        end
+        if  sys.timerIsActive(report,format) then
+            sys.timerStop(report,format)
+        end
+        sys.waitUntil("GPS_GO")
+        sys.wait(100)
+    end
+end
+
+-- NTP同步后清零一次startTime,避免第一次开机的时候utc时间跳变
+-- sys.subscribe("NTP_SUCCEED", function()startTime = os.time() end)
+sys.taskInit(function()
+    -- NTP只需要等一次,执行完成后这个task就退出了,释放内存
+    sys.waitUntil("NTP_UPDATE")
+    local t = os.date("*t")
+    log.info("网络时间已同步", string.format("%04d-%02d-%02d %02d:%02d:%02d", t.year,t.month,t.day,t.hour,t.min,t.sec))
+    gpsstartTime = os.time()
+end)
+-- 订阅服务器远程唤醒指令
+sys.subscribe("REMOTE_WAKEUP", function()
+    sys.publish("GPS_GO")
+    sens.wup = true 
+end)
+--订阅服务器远程关闭指令
+sys.subscribe("REMOTE_CLOSE",function ()
+    log.info("GPS已关闭-------------------------------------")
+    close()
+end)
 ---------------------------------------------------------- 用户控制 GPIO 配置 ----------------------------------------------------------
 -- function gpio_set() end
 
@@ -121,29 +355,36 @@ pios = {
     pio7 =gpio.setup(7, nil,gpio.PULLDOWN),
     pio8 =gpio.setup(8, nil,gpio.PULLDOWN),
     pio9 =gpio.setup(9, nil,gpio.PULLDOWN),
-    pio12 =gpio.setup(12, nil,gpio.PULLDOWN),
-    pio13 =gpio.setup(13, nil,gpio.PULLDOWN),
     pio16 =gpio.setup(16, nil,gpio.PULLDOWN),
     pio17 =gpio.setup(17, nil,gpio.PULLDOWN),
     pio19 =gpio.setup(19, nil,gpio.PULLDOWN),
     pio20 =gpio.setup(20, nil,gpio.PULLDOWN),
     pio21 =gpio.setup(21, nil,gpio.PULLDOWN),
     pio22 =gpio.setup(22, nil,gpio.PULLDOWN),
-    pio23 =gpio.setup(23, nil,gpio.PULLDOWN),
     pio24 =gpio.setup(24, nil,gpio.PULLDOWN),
     pio25 =gpio.setup(25, nil,gpio.PULLDOWN),
-    pio26 =gpio.setup(26, nil,gpio.PULLDOWN),
-    pio27 =gpio.setup(27, nil,gpio.PULLDOWN),
-    pio28 =gpio.setup(28, nil,gpio.PULLDOWN),
+    pio26 =gpio.setup(26, nil,gpio.PULLDOWN),  --READY指示灯
+    pio27 =gpio.setup(27, nil,gpio.PULLDOWN),  --NET指示灯
+    pio28 =gpio.setup(28, nil,gpio.PULLDOWN),  
     pio29 =gpio.setup(29, nil,gpio.PULLDOWN),
     pio30 =gpio.setup(30, nil,gpio.PULLDOWN),
     pio31 =gpio.setup(31, nil,gpio.PULLDOWN),
+    pio32 =gpio.setup(32, nil,gpio.PULLDOWN),
+    pio33 =gpio.setup(33, nil,gpio.PULLDOWN),
+    pio34 =gpio.setup(34, nil,gpio.PULLDOWN),
+    pio35 =gpio.setup(35, nil,gpio.PULLDOWN),
 }
 
-
+-- 网络READY信号
+if not dtu.pins or not dtu.pins[2] or not pios[dtu.pins[2]] then 
+    netready = gpio.setup(27, 0)
+else
+    netready = gpio.setup(tonumber(dtu.pins[2]:sub(4, -1)), 0)
+    pios[dtu.pins[2]] = nil
+end
 -- 重置DTU
 function resetConfig(msg)
-    if msg ~= cpu.INT_GPIO_POSEDGE then
+    if msg and msg == 0 then
         db.remove(cfg)
         if io.exists("/alikey.cnf") then os.remove("/alikey.cnf") end
         if io.exists("/qqiot.dat") then os.remove("/qqiot.dat") end
@@ -151,39 +392,79 @@ function resetConfig(msg)
         dtulib.restart("软件恢复出厂默认值: OK")
     end
 end
+if not dtu.pins or not dtu.pins[3] or not pios[dtu.pins[3]] then 
 
+else
+    gpio.setup(tonumber(dtu.pins[3]:sub(4, -1)), resetConfig, gpio.PULLUP)
+    pios[dtu.pins[3]] = nil
+end
+
+-- NETLED指示灯任务
+local function blinkPwm(ledPin, light, dark)
+    ledPin(1)
+    sys.wait(light)
+    ledPin(0)
+    sys.wait(dark)
+end
+
+local function netled(led)
+    local ledpin = gpio.setup(led, 1)
+    while true do
+        -- GSM注册中
+        while mobile.status()==0 do blinkPwm(ledpin, 100, 100) end
+        while mobile.status()==1 do
+            if create.getDatalink() then
+                netready(1)
+                blinkPwm(ledpin, 200, 1800)
+            else
+                netready(0)
+                blinkPwm(ledpin, 500, 500)
+            end
+        end
+        sys.wait(100)
+    end
+end
+if not dtu.pins or not dtu.pins[1] or not pios[dtu.pins[1]] then 
+    sys.taskInit(netled,26)
+else
+    sys.taskInit(netled, tonumber(dtu.pins[1]:sub(4, -1)))
+    pios[dtu.pins[1]] = nil
+end
 ---------------------------------------------------------- DTU 任务部分 ----------------------------------------------------------
 -- 配置串口
-if dtu.pwrmod ~= "energy" then pm.request(pm.LIGHT) end
+if dtu.pwrmod ~= "energy" then 
+    pm.request(pm.IDLE) 
+else
+    pm.request(pm.LIGHT)
+end
 
---每隔1分钟重置串口计数
--- sys.timerLoopStart(function()
---     flow = tonumber(dtu.flow)
---     if flow and flow ~= 0 then
---         if flowCount[1] > flow then
---             uart.on(1, "receive")
---             log.info("uart1 close")
---             uart.close(1)
---             log.info("uart1.read length count:", flowCount[1])
---         end
---         if flowCount[2] > flow then
---             uart.on(2, "receive")
---             log.info("uart2 close")
---             uart.close(2)
---             log.info("uart2.read length count:", flowCount[2])
---         end
---     end
---     if timecnt > 60 then
---         timecnt = 1
---         flowCount[4], flowCount[1], flowCount[2], flowCount[3] = 0, 0, 0, 0
---     else
---         timecnt = timecnt + 1
---     end
--- end, 1000)
+-- 每隔1分钟重置串口计数
+sys.timerLoopStart(function()
+    flow = tonumber(dtu.flow)
+    if flow and flow ~= 0 then
+        if flowCount[1] > flow then
+            uart.on(1, "receive")
+            log.info("uart1 close")
+            uart.close(1)
+            log.info("uart1.read length count:", flowCount[1])
+        end
+        if flowCount[2] > flow then
+            uart.on(2, "receive")
+            log.info("uart2 close")
+            uart.close(2)
+            log.info("uart2.read length count:", flowCount[2])
+        end
+    end
+    if timecnt > 60 then
+        timecnt = 1
+        flowCount[4], flowCount[1], flowCount[2], flowCount[3] = 0, 0, 0, 0
+    else
+        timecnt = timecnt + 1
+    end
+end, 1000)
 
 -- 串口写数据处理
 function write(uid, str,cid)
-    log.info("进到串口写里面来了",str)
     local dwprotFnc = dtu.dwprot and dtu.dwprot[cid] and dtu.dwprot[cid] ~= "" and loadstring(dtu.dwprot[cid]:match("function(.+)end"))
     local upprotFnc = dtu.upprot and dtu.upprot[cid] and dtu.upprot[cid] ~= "" and loadstring(dtu.upprot[cid]:match("function(.+)end"))
     uid = tonumber(uid)
@@ -197,11 +478,7 @@ function write(uid, str,cid)
         log.warn("uart" .. uid .. ".write data length:", writeIdle[uid], #str)
     end
     if writeIdle[uid] and writeBuff[uid][1] then
-        log.info("我是不是进到这了啊",writeBuff[uid][1])
-        log.info("我是不是进到这了啊hex",writeBuff[uid][1]:toHex())
         if 0 ~= uart.write(uid, writeBuff[uid][1]) then
-            log.info("UARTLEN",uartlen)
-            log.info("WRITEUID",writeBuff[uid][1])
             table.remove(writeBuff[uid], 1)
             writeIdle[uid] = false
             log.warn("UART_" .. uid .. " writing ...")
@@ -213,13 +490,10 @@ local function writeDone(uid)
     if #writeBuff[uid] == 0 then
         writeIdle[uid] = true
         sys.publish("UART_" .. uid .. "_WRITE_DONE")
-        log.info("进到if里面来了居然")
         log.warn("UART_" .. uid .. "write done!")
     else
         writeIdle[uid] = false
-        log.info("我到这了也",writeBuff[uid][1])
         uart.write(uid, table.remove(writeBuff[uid], 1))
-        log.info("进到else里面来了居然")
         log.warn("UART_" .. uid .. "writing ...")
     end
 end
@@ -291,9 +565,10 @@ cmd.rrpc = {
     ["getfwver"] = function(t) return "rrpc,getfwver," .. _G.PROJECT .. "_" .. _G.VERSION .. "_" .. rtos.version() end,
     ["getnetmode"] = function(t) return "rrpc,getnetmode," .. mobile.status() and mobile.status() or 1 end,
     ["getver"] = function(t) return "rrpc,getver," .. _G.VERSION end,
-    ["getcsq"] = function(t) return "rrpc,getcsq," .. (mobile.rssi() or "error ") end,
+    ["getcsq"] = function(t) return "rrpc,getcsq," .. (mobile.csq() or "error ") end,
     ["getadc"] = function(t) return "rrpc,getadc," .. create.getADC(tonumber(t[1]) or 0) end,
     ["setchannel"] = function(t)
+        log.info("进到setchannel里面了")
         log.info("wEB的值",cfg:select("webProtect"))
         for i=1,#t do
             if t[i]~=nil and t[i]~="all" then
@@ -312,26 +587,26 @@ cmd.rrpc = {
     ["getimei"] = function(t) return "rrpc,getimei," .. (mobile.imei() or "error") end,
     ["getmuid"] = function(t) return "rrpc,getmuid," .. (mobile.muid() or "error") end,
     ["getimsi"] = function(t) return "rrpc,getimsi," .. (mobile.imsi() or "error") end,
-    ["getvbatt"] = function(t) return "rrpc,getvbatt," .. adc.read(adc.CH_VBAT) end,
+    ["getvbatt"] = function(t) return "rrpc,getvbatt," .. create.getADC(adc.CH_VBAT) end,
     ["geticcid"] = function(t) return "rrpc,geticcid," .. (mobile.iccid() or "error") end,
     ["getproject"] = function(t) return "rrpc,getproject," .. _G.PROJECT end,
     ["getcorever"] = function(t) return "rrpc,getcorever," .. rtos.version() end,
-    -- ["getlocation"] = function(t) return "rrpc,location," .. (lbs.lat or 0) .. "," .. (lbs.lng or 0) end,
-    -- ["getreallocation"] = function(t)
-    --     lbsLoc.request(function(result, lat, lng, addr)
-    --         if result then
-    --             lbs.lat, lbs.lng = lat, lng
-    --             setLocation(lat, lng)
-    --         end
-    --     end)
-    --     return "rrpc,location," .. (lbs.lat or 0) .. "," .. (lbs.lng or 0)
-    -- end,
+    ["getlocation"] = function(t) return "rrpc,location," .. (lbs.lat or 0) .. "," .. (lbs.lng or 0) end,
+    ["getreallocation"] = function(t)
+        lbsLoc.request(function(result, lat, lng, addr,time,locType)
+            if result then
+                lbs.lat, lbs.lng = lat, lng
+                log.info("定位类型,基站定位成功返回0", locType)
+                setLocation(lat, lng)
+            end
+        end)
+        return "rrpc,location," .. (lbs.lat or 0) .. "," .. (lbs.lng or 0)
+    end,
     ["gettime"] = function(t)
         local c = rtc.get()
-        return "rrpc,nettime," .. string.format("%04d,%02d,%02d,%02d,%02d,%02d\r\n", c.year, c.month, c.day, c.hour, c.min, c.sec)
+        log.info("C",json.encode(c))
+        return "rrpc,nettime," .. string.format("%04d,%02d,%02d,%02d,%02d,%02d\r\n", c.year, c.mon, c.day, c.hour, c.min, c.sec)
     end,
-
-    -- if misc.getModelType() == "724UG" return "rrpc,getpio" .. t[1] .. "," .. pio.pin.getval(t[1])
     ["setpio"] = function(t) 
         if pios["pio" .. t[1]] and (tonumber(t[2]) > -1 and tonumber(t[2]) < 2) then 
             pios["pio" .. t[1]](tonumber(t[2]) or 0)
@@ -343,31 +618,28 @@ cmd.rrpc = {
             return "rrpc,getpio" .. t[1] .. "," .. gpio.get(t[1]) 
         end
         return "ERROR" end,
-    --["getsht"] = function(t) local tmp, hum = iic.sht(2, tonumber(t[1])) return "rrpc,getsht," .. (tmp or 0) .. "," .. (hum or 0) end,
-    --["getam2320"] = function(t) local tmp, hum = iic.am2320(2, tonumber(t[1])) return "rrpc,getam2320," .. (tmp or 0) .. "," .. (hum or 0) end,
     ["netstatus"] = function(t)
         if t == nil or t == "" or t[1] == nil or t[1] == "" then
             return "rrpc,netstatus," .. (create.getDatalink() and "RDY" or "NORDY")
         else
-            log.info("TTTT",t[1],t[2],t[3])
             return "rrpc,netstatus," .. (t[1] and (t[1] .. ",") or "") .. (create.getDatalink(tonumber(t[1])) and "RDY" or "NORDY")
         end
     end,
     ["gps_wakeup"] = function(t)sys.publish("REMOTE_WAKEUP") return "rrpc,gps_wakeup,OK" end,
-    ["gps_getsta"] = function(t) return "rrpc,gps_getsta," .. tracker.deviceMessage(t[1] or "json") end,
-    ["gps_getmsg"] = function(t) return "rrpc,gps_getmsg," .. tracker.locateMessage(t[1] or "json") end,
-    ["gps_close"] = function(t) if (misc.getModelType()):find("820UG") then sys.publish("REMOTE_CLOSE") return "rrpc,gps_close,ok" else return "error" end end,
+    ["gps_getsta"] = function(t) return "rrpc,gps_getsta," .. deviceMessage(t[1] or "json") end,
+    ["gps_getmsg"] = function(t) return "rrpc,gps_getmsg," .. locateMessage(t[1] or "json") end,
+    ["gps_close"] = function(t) sys.publish("REMOTE_CLOSE") return "rrpc,gps_close,ok" end,
     ["upconfig"] = function(t)sys.publish("UPDATE_DTU_CNF") return "rrpc,upconfig,OK" end,
     ["function"] = function(t)log.info("rrpc,function:", table.concat(t, ",")) return "rrpc,function," .. (loadstring(table.concat(t, ","))() or "OK") end,
-    -- ["tts_play"] = function(t)
-    --     if not isTTS then return "rrpc,tts_play,not_tts_lod" end
-    --     local str = string.upper(t[1]) == "GB2312" and common.gb2312ToUtf8(t[2]) or t[2]
-    --     audio.play(1, "TTS", str, tonumber(t[3]) or 7, nil, false, 0)
-    --     return "rrpc,tts_play,OK"
-    -- end,
-    ["getSN"] = function(t) log.info("rrpc,getSN,"..mobile.sn()) return "rrpc,getSN,"..(mobile.sn() or 0) end,
-    --["setSN"] = function(t) log.info("rrpc,setSN,",misc.setSn(t[1])) return "ok" end,
-
+    -- ["setSN"] = function(t) log.info("rrpc,getSN,"..mobile.sn(t)) return "rrpc,getSN,"..(mobile.sn() or 0) end,
+    -- ["getSN"] = function(t)
+    --      local sn=mobile.sn()
+    --     if sn then
+    --         log.info("SN",sn)
+    --     else
+    --         log.info("SN2",sn)
+    --     end
+    --     return "rrpc,getSN,"end,
 }
 
 
@@ -408,7 +680,8 @@ local function read(uid, idx)
                 str = s
             end
         end
-        local t = str:match("(.+)\r\n") and str:match("(.+)\r\n"):split(',') or str:split(',')
+        --local t = str:match("(.+)\r\n") and str:match("(.+)\r\n"):split(',') or str:split(',')
+        local t = str:match("(.+)\r\n") and dtulib.split(str:match("(.+)\r\n"),',') or dtulib.split(str,',')
         if not mobile.status() ~= 1 then write(uid, "NET_NORDY\r\n") return end
         sys.taskInit(function(t, uid)
             local code, head, body = dtulib.request(t[2]:upper(), t[3],t[8],nil, jsonstr or t[5], tonumber(t[6]) or 1, t[7])
@@ -458,15 +731,22 @@ local function read(uid, idx)
     if tonumber(dtu.passon) == 1 then
         log.info("进到识别码里面来了")
         local interval, samptime = create.getTimParam()
+        log.info("INTERVAL",interval[uid],samptime[uid])
         if interval[uid] > 0 then -- 定时采集透传模式
+            --如果定时采集间隔>0，证明有定时采集间隔
             -- 这里注意间隔时长等于预设间隔时长的时候就要采集,否则1秒的采集无法采集
             if os.difftime(os.time(), startTime[uid]) >= interval[uid] then
+                --那么就判断当前时间减去上次时间是否大于被动上报间隔
                 if os.difftime(os.time(), startTime[uid]) < interval[uid] + samptime[uid] then
+                    --如果当前时间减去上次时间，小于被动上报间隔+被动采集间隔，就把数据插入到表内
                     table.insert(sendBuff[uid], s)
                 elseif startTime[uid] == 0 then
+                    --第一次的时候，立即采集一次串口数据。
+                    log.info("直接采集了一次")
                     -- 首次上电立刻采集1次
                     table.insert(sendBuff[uid], s)
                     startTime[uid] = os.time() - interval[uid]
+                    --上一次的时间等于os.time-被动上报间隔。
                 else
                     startTime[uid] = os.time()
                     if #sendBuff[uid] ~= 0 then
@@ -479,17 +759,14 @@ local function read(uid, idx)
                 sendBuff[uid] = {}
             end
         else -- 正常透传模式
-            log.info("进到识别码里面来来3")
             log.info("这个里面的内容是",tonumber(dtu.plate) == 1 and mobile.imei() .. s or s)
             sys.publish("NET_SENT_RDY_" .. uid, tonumber(dtu.plate) == 1 and mobile.imei() .. s or s)
         end
     else
         -- 非透传模式,解析数据
         if s:sub(1, 5) == "send," then
-            log.info("进到识别码里面来来4")
             sys.publish("NET_SENT_RDY_" .. s:sub(6, 6), s:sub(8, -1))
         else
-            log.info("进到识别码里面来来5")
             write(uid, "ERROR\r\n")
         end
     end
@@ -509,6 +786,7 @@ function uart_INIT(i, uconf)
     uconf[i][1] = tonumber(uconf[i][1])
     log.info("串口的数据是",uconf[i][1], uconf[i][2], uconf[i][3], uconf[i][4], uconf[i][5],uconf[i][6])
     local stb=uconf[i][5]==0 and 1 or 2
+    local rs485us=tonumber(uconf[i][7]) and tonumber(uconf[i][7]) or 0
     local parity=uart.None
     if uconf[i][4]==0 then
         parity=uart.EVEN
@@ -517,17 +795,21 @@ function uart_INIT(i, uconf)
     elseif uconf[i][4]==2 then
         parity=uart.None
     end
-    uart.setup(uconf[i][1], uconf[i][2], uconf[i][3], stb,parity)
+    if pios[dtu.uconf[i][6]] then
+        default["dir" .. i] = tonumber(dtu.uconf[i][6]:sub(4, -1))
+        pios[dtu.uconf[i][6]] = nil
+    else
+        default["dir" .. i] = nil
+    end
+    uart.setup(uconf[i][1], uconf[i][2], uconf[i][3], stb,parity,nil,nil, default["dir" .. i],nil,rs485us)
     uart.on(uconf[i][1], "sent", writeDone)
     if uconf[i][1] == uart.USB or tonumber(dtu.uartReadTime) > 0 then
-        log.info("进到这里面来了呀1")
         uart.on(uconf[i][1], "receive", function(uid, length)
             log.info("接收到的数据是",uid,length)
             table.insert(recvBuff[i], uart.read(uconf[i][1], length or 8192))
             sys.timerStart(sys.publish, tonumber(dtu.uartReadTime) or 25, "UART_RECV_WAIT_" .. uconf[i][1], uconf[i][1], i)
         end)
     else
-        log.info("进到这里面来了呀2")
         uart.on(uconf[i][1], "receive", function(uid, length)
             local str = uart.read(uconf[i][1], length or 8192)
             sys.timerStart(streamEnd, 1000, i)
@@ -545,56 +827,15 @@ function uart_INIT(i, uconf)
     sys.subscribe("UART_SENT_RDY_" .. uconf[i][1], write)
     -- 网络数据写串口延时分帧
     sys.subscribe("NET_RECV_WAIT_" .. uconf[i][1], function(uid, str)
-        log.info("uid123",uid,str,str:toHex())
         if tonumber(dtu.netReadTime) and tonumber(dtu.netReadTime) > 5 then
             for j = 1, #str, SENDSIZE do
                 table.insert(writeBuff[uid], str:sub(j, j + SENDSIZE - 1))
             end
             sys.timerStart(sys.publish, tonumber(dtu.netReadTime) or 30, "UART_SENT_RDY_" .. uid, uid, true)
         else
-            log.info("uid122",uid,str,str:toHex())
             sys.publish("UART_SENT_RDY_" .. uid, uid, str)
         end
     end)
-    -- 485方向控制
-    -- if not dtu.uconf[i][6] or dtu.uconf[i][6] == "" then -- 这么定义是为了和之前的代码兼容
-    --     if i == 1 then
-    --         if is8910 then
-    --             default["dir1"] = 18
-    --         elseif is1802S then
-    --             default["dir1"] = 61
-    --         elseif is4gLod then
-    --             default["dir1"] = 23
-    --         else
-    --             default["dir1"] = 2
-    --         end
-    --     elseif i == 2 then
-    --         if is8910 then
-    --             default["dir2"] = 23
-    --         elseif is1802S then
-    --             default["dir2"] = 31
-    --         elseif is4gLod then
-    --             default["dir2"] = 59
-    --         else
-    --             default["dir2"] = 6
-    --         end
-    --     elseif i == 3 then
-    --         if is8910 then
-    --             default["dir3"] = 7
-    --         end
-    --     end
-    -- else
-    --     if pios[dtu.uconf[i][6]] then
-    --         default["dir" .. i] = tonumber(dtu.uconf[i][6]:sub(4, -1))
-    --         pios[dtu.uconf[i][6]] = nil
-    --     else
-    --         default["dir" .. i] = nil
-    --     end
-    -- end
-    -- if default["dir" .. i] then
-    --     pins.setup(default["dir" .. i], 0)
-    --     uart.set_rs485_oe(i, default["dir" .. i])
-    -- end
 end
 sys.taskInit(function()
     local rst, code, head, body, url = false
@@ -654,38 +895,55 @@ sys.taskInit(function()
         sys.publish("DTU_PARAM_READY")
         sys.wait(30000)
         ---------- 基站坐标查询 ----------
-        -- lbsLoc.request(function(result, lat, lng, addr)
-        --     if result then
-        --         lbs.lat, lbs.lng = lat, lng
-        --         setLocation(lat, lng)
-        --     end
-        -- end)
+        lbsLoc.request(function(result, lat, lng, addr,time,locType)
+            if result then
+                lbs.lat, lbs.lng = lat, lng
+                log.info("定位类型,基站定位成功返回0", locType)
+                setLocation(lat, lng)
+            end
+        end)
         log.warn("短信或电话请求更新:", sys.waitUntil("UPDATE_DTU_CNF", 86400000))
     end
 end)
 
 -- 初始化配置UART1和UART2
---local uidgps = dtu.gps and dtu.gps.fun and tonumber(dtu.gps.fun[1])
+local uidgps = dtu.gps and dtu.gps.fun and tonumber(dtu.gps.fun[1])
 if uidgps ~= 1 and dtu.uconf and dtu.uconf[1] and tonumber(dtu.uconf[1][1]) == 1 then
-    log.info("我配置串口1了啊")
     uart_INIT(1, dtu.uconf) end
 if uidgps ~= 2 and dtu.uconf and dtu.uconf[2] and tonumber(dtu.uconf[2][1]) == 2 then uart_INIT(2, dtu.uconf) end
 
 -- 启动GPS任务
--- if uidgps then
---     -- 从pios列表去掉自定义的io
---     if dtu.gps.pio then
---         for i = 1, 3 do if pios[dtu.gps.pio[i]] then pios[dtu.gps.pio[i]] = nil end end
---     end
---     --sys.taskInit(tracker.sensMonitor, unpack(dtu.gps.pio))
---     sys.taskInit(tracker.alert, unpack(dtu.gps.fun))
--- end
+if uidgps then
+    -- 从pios列表去掉自定义的io
+    if dtu.gps.pio then
+        for i = 1, 3 do if pios[dtu.gps.pio[i]] then pios[dtu.gps.pio[i]] = nil end end
+    end
+    sys.taskInit(sensMonitor, unpack(dtu.gps.pio))
+    sys.taskInit(alert, unpack(dtu.gps.fun))
+end
 
 ---------------------------------------------------------- 预警任务线程 ----------------------------------------------------------
 if dtu.warn and dtu.warn.gpio and #dtu.warn.gpio > 0 then
+    log.info("DTU<",dtu.warn.gpio)
+    for key, value in pairs(dtu.warn.gpio) do
+        log.info("KEY的值是",key,value)
+        for key1, value1 in pairs(value) do
+            log.info("VALUE",key1,value1)
+        end
+    end
+    log.info("DTU#",#dtu.warn.gpio)
+    -- log.info("gpio值是",tonumber(dtu.warn.gpio[i][1]:sub(4, -1)))
     for i = 1, #dtu.warn.gpio do
+        gpio.debounce(tonumber(dtu.warn.gpio[i][1]:sub(4, -1)),500)
+        local irq=dtu.warn.gpio[i][2]==1 and gpio.FALLING or gpio.RISING
+        log.info("IRQ",irq)
+        log.info("IRQ2",gpio.FALLING,gpio.RISING)
         gpio.setup(tonumber(dtu.warn.gpio[i][1]:sub(4, -1)), function(msg)
+            log.info("MSG是",msg)
+            log.info("MSG2是",gpio.RISING)
+            log.info("MSG3是",gpio.FALLING)
             if (msg == gpio.RISING and tonumber(dtu.warn.gpio[i][2]) == 1) or (msg == gpio.FALLING and tonumber(dtu.warn.gpio[i][3]) == 1) then
+                log.info("进到第一个判断里面来了")
                 if tonumber(dtu.warn.gpio[i][6]) == 1 then 
                     log.info("发布一个主题","NET_SENT_RDY_" .. dtu.warn.gpio[i][5], dtu.warn.gpio[i][4]) 
                     sys.publish("NET_SENT_RDY_" .. dtu.warn.gpio[i][5], dtu.warn.gpio[i][4]) 
@@ -693,24 +951,8 @@ if dtu.warn and dtu.warn.gpio and #dtu.warn.gpio > 0 then
                 if dtu.preset and tonumber(dtu.preset.number) then
                     if tonumber(dtu.warn.gpio[i][7]) == 1 then sms.send(dtu.preset.number,dtu.warn.gpio[i][4]) end
                 end
-            else
-                for a = 1, #dtu.warn.gpio do
-                    if a~=i and tonumber(dtu.warn.gpio[i][1]:sub(4, -1))==tonumber(dtu.warn.gpio[a][1]:sub(4, -1)) and a<i  then
-                        if (msg == gpio.RISING and tonumber(dtu.warn.gpio[a][2]) == 1) or (msg == gpio.FALLING and tonumber(dtu.warn.gpio[a][3]) == 1) then
-                            if tonumber(dtu.warn.gpio[a][6]) == 1 then 
-                                --if conf[dtu.warn.gpio[a][5]]
-                                log.info("发布一个主题","NET_SENT_RDY_" .. dtu.warn.gpio[a][5], dtu.warn.gpio[a][4]) 
-                                sys.publish("NET_SENT_RDY_" .. dtu.warn.gpio[a][5], dtu.warn.gpio[a][4]) 
-                            end
-                            if dtu.preset and tonumber(dtu.preset.number) then
-                                if tonumber(dtu.warn.gpio[a][7]) == 1 then sms.send(dtu.preset.number, dtu.warn.gpio[a][4]) end
-                                
-                            end
-                        end                
-                    end
-                end
             end
-        end, gpio.PULLUP)
+        end, gpio.PULLUP,irq)
     end
 end
 
@@ -775,7 +1017,7 @@ end
 sys.timerLoopStart(function()
     log.info("mem.lua", rtos.meminfo())
     log.info("mem.sys", rtos.meminfo("sys"))
-    log.info("VERSION",_G.VERSION)
+    -- log.info("VERSION",_G.VERSION)
  end, 3000)
 
 return {setLocation = setLocation, gpio_set = gpio_set}

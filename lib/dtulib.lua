@@ -134,8 +134,42 @@ function request(method, url, timeout, params, data, ctype, basic, head, cert, f
     log.info("method",method)
     return http.request(method,url,headers,data,{timeout=timeout}).wait()
 end
+--- 将HEX字符串转成Lua字符串，如"313233616263"转为"123abc", 函数里加入了过滤分隔符，可以过滤掉大部分分隔符（可参见正则表达式中\s和\p的范围）。
+-- @string hex,16进制组成的串
+-- @return charstring,字符组成的串
+-- @return len,输出字符串的长度
+-- @usage
+function fromHexnew(hex)
+    return hex:gsub("[%s%p]", ""):gsub("%x%x", function(c)
+        return string.char(tonumber(c, 16))
+    end)
+end
+
+--- 按照指定分隔符分割字符串
+-- @string str 输入字符串
+-- @param[opt=string,number,nil] delimiter 分隔符：
+--      string: 字符串类型分隔符
+--      number: 按长度分割
+--      nil   ：相当于"", 将字符串转为字符数组
+-- @return 分割后的字符串列表
+-- @usage "123,456,789":split(',') -> {'123','456','789'}
+function split(str, delimiter)
+    local strlist, tmp = {}, string.byte(delimiter)
+    if delimiter and delimiter == "" then
+        for i = 1, #str do strlist[i] = str:sub(i, i) end
+    elseif type(delimiter) == "number" then
+        for i = 1, #str, delimiter do table.insert(strlist, str:sub(i, i + delimiter - 1)) end
+    else
+        for substr in string.gmatch(str .. delimiter, "(.-)" .. (((tmp > 96 and tmp < 123) or (tmp > 64 and tmp < 91) or (tmp > 47 and tmp < 58)) and delimiter or "%" .. delimiter)) do
+            table.insert(strlist, substr)
+        end
+    end
+    return strlist
+end
 
 return{
     restart=restart,
-    request=request
+    request=request,
+    fromHexnew=fromHexnew,
+    split=split
 }
