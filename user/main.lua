@@ -2,7 +2,8 @@
 PROJECT = "test_iRTU"
 VERSION = "1.0.4"
 
-PRODUCT_KEY = "0LkZx9Kn3tOhtW7uod48xhilVNrVsScV" --618DTU测试版本的key固定为它
+-- PRODUCT_KEY = "0LkZx9Kn3tOhtW7uod48xhilVNrVsScV" --618DTU正式版本的key固定为它
+PRODUCT_KEY = "z1OoDfAP2LDtOStiMQTVDfXO6RkrWeBG" --618DTU测试版本的key固定为它
 
 log.info("main", PROJECT, VERSION)
 
