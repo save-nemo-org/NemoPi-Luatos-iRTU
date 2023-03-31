@@ -49,7 +49,7 @@ function serializeio(file, o)
     end
 end
 
-function new(path)
+function db.new(path)
     log.error("o.path111",path)
     if path == nil then
         log.error("db.new:", "Empty path!")
@@ -178,14 +178,11 @@ end
 -- @param o： 要删除的数据库对象
 -- @param[opt=nil]...: 要删除的其他数据库对象
 -- @return nil
-function remove(o, ...)
+function db.remove(o, ...)
     for _, k in ipairs({o, ...}) do
         os.remove(k.path)
         k.path, k.sheet, k.type = nil, nil, nil
     end
 end
 
-return  {
-    new=new,
-    remove=remove
-}
+return  db

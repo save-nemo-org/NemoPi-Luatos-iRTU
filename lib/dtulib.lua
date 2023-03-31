@@ -3,18 +3,18 @@ dtulib={}
 -- @string r 重启原因，用户自定义，一般是string类型，重启后的trace中会打印出此重启原因
 -- @return 无
 -- @usage sys.restart('程序超时软件重启')
-function restart(r)
+function dtulib.restart(r)
     assert(r and r ~= "", "sys.restart cause null")
     log.warn("sys.restart",r)
-    mobile.flymode(0, true)--重启前进入下飞行模式，避免重启前上次模块和基站的心跳没断导致下次驻网不上
-    mobile.flymode(1, true)
+    -- mobile.flymode(0, true)--重启前进入下飞行模式，避免重启前上次模块和基站的心跳没断导致下次驻网不上
+    -- mobile.flymode(1, true)
     rtos.reboot()
 end
 --- table.merge(...) 合并多个表格
 -- @table[...],要合并的多个table
 -- @return table,返回合并后的表格
 -- @usage table.merge({1,2,3},{3, a = 4, b = 5, 6})
-function merge(...)
+function dtulib.merge(...)
     local tabs = {...}
     if #tabs == 0 then return {} end
     local origin = tabs[1]
@@ -85,7 +85,7 @@ end
 -- @return string,string,错误返回 response_code, error_message
 -- @usage local c, h, b = httpv2.request(url, method, headers, body)
 -- @usage local r, e  = httpv2.request("http://wrong.url/ ")
-function request(method, url, timeout, params, data, ctype, basic, head, cert, fnc)
+function dtulib.request(method, url, timeout, params, data, ctype, basic, head, cert, fnc)
     local _, idx, offset, ssl, auth, https, host, port, path
     local headers = {
         ['User-Agent'] = 'Mozilla/4.0',
@@ -128,10 +128,7 @@ function request(method, url, timeout, params, data, ctype, basic, head, cert, f
     -- 处理headers部分
     local str = ""
     for k, v in pairs(headers) do str = str .. k .. ": " .. v .. "\r\n" end
-    log.info("URL",url)
-    for k, v in pairs(headers) do log.info("k",k,v) end
-    log.info("DATA11",data)
-    log.info("method",method)
+
     return http.request(method,url,headers,data,{timeout=timeout}).wait()
 end
 --- 将HEX字符串转成Lua字符串，如"313233616263"转为"123abc", 函数里加入了过滤分隔符，可以过滤掉大部分分隔符（可参见正则表达式中\s和\p的范围）。
@@ -139,7 +136,7 @@ end
 -- @return charstring,字符组成的串
 -- @return len,输出字符串的长度
 -- @usage
-function fromHexnew(hex)
+function dtulib.fromHexnew(hex)
     return hex:gsub("[%s%p]", ""):gsub("%x%x", function(c)
         return string.char(tonumber(c, 16))
     end)
@@ -153,7 +150,7 @@ end
 --      nil   ：相当于"", 将字符串转为字符数组
 -- @return 分割后的字符串列表
 -- @usage "123,456,789":split(',') -> {'123','456','789'}
-function split(str, delimiter)
+function dtulib.split(str, delimiter)
     local strlist, tmp = {}, string.byte(delimiter)
     if delimiter and delimiter == "" then
         for i = 1, #str do strlist[i] = str:sub(i, i) end
@@ -167,9 +164,4 @@ function split(str, delimiter)
     return strlist
 end
 
-return{
-    restart=restart,
-    request=request,
-    fromHexnew=fromHexnew,
-    split=split
-}
+return dtulib

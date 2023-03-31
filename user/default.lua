@@ -73,7 +73,7 @@ local dtu = {
 getParamVer = function() return dtu.param_ver end
 
 -- 保存获取的基站坐标
-function setLocation(lat, lng)
+function default.setLocation(lat, lng)
     lbs.lat, lbs.lng = lat, lng
     log.info("基站定位请求的结果:", lat, lng)
 end
@@ -465,8 +465,6 @@ end, 1000)
 
 -- 串口写数据处理
 function write(uid, str,cid)
-    local dwprotFnc = dtu.dwprot and dtu.dwprot[cid] and dtu.dwprot[cid] ~= "" and loadstring(dtu.dwprot[cid]:match("function(.+)end"))
-    local upprotFnc = dtu.upprot and dtu.upprot[cid] and dtu.upprot[cid] ~= "" and loadstring(dtu.upprot[cid]:match("function(.+)end"))
     uid = tonumber(uid)
     if not str or str == "" or not uid then return end
     if uid == uart.USB then return uart.write(uart.USB, str) end
@@ -597,7 +595,7 @@ cmd.rrpc = {
             if result then
                 lbs.lat, lbs.lng = lat, lng
                 log.info("定位类型,基站定位成功返回0", locType)
-                setLocation(lat, lng)
+                default.setLocation(lat, lng)
             end
         end)
         return "rrpc,location," .. (lbs.lat or 0) .. "," .. (lbs.lng or 0)
@@ -801,7 +799,9 @@ function uart_INIT(i, uconf)
     else
         default["dir" .. i] = nil
     end
-    uart.setup(uconf[i][1], uconf[i][2], uconf[i][3], stb,parity,nil,nil, default["dir" .. i],nil,rs485us)
+    log.info("DEFAULT",default["dir" .. i])
+    log.info("rs485us",rs485us)
+    uart.setup(uconf[i][1], uconf[i][2], uconf[i][3], stb,parity,uart.LSB,1024, default["dir" .. i],0,rs485us)
     uart.on(uconf[i][1], "sent", writeDone)
     if uconf[i][1] == uart.USB or tonumber(dtu.uartReadTime) > 0 then
         uart.on(uconf[i][1], "receive", function(uid, length)
@@ -899,7 +899,7 @@ sys.taskInit(function()
             if result then
                 lbs.lat, lbs.lng = lat, lng
                 log.info("定位类型,基站定位成功返回0", locType)
-                setLocation(lat, lng)
+                default.setLocation(lat, lng)
             end
         end)
         log.warn("短信或电话请求更新:", sys.waitUntil("UPDATE_DTU_CNF", 86400000))
@@ -1014,10 +1014,11 @@ if dtu.task and #dtu.task ~= 0 then
     end
 end
 
-sys.timerLoopStart(function()
-    log.info("mem.lua", rtos.meminfo())
-    log.info("mem.sys", rtos.meminfo("sys"))
-    -- log.info("VERSION",_G.VERSION)
- end, 3000)
+-- sys.timerLoopStart(function()
+--     -- log.info("mem.lua", rtos.meminfo())
+--     -- log.info("mem.sys", rtos.meminfo("sys"))
+--     -- -- log.info("VERSION",_G.VERSION)
+--     sys.publish("UART_SENT_RDY_1" , 1, "SENDOK")
+--  end, 3000)
 
-return {setLocation = setLocation, gpio_set = gpio_set}
+return default

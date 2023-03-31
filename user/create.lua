@@ -15,7 +15,7 @@ local output, input = {}, {}
 
 
 -- 用户读取ADC
-function getADC(id)
+function create.getADC(id)
     adc.open(id)
     local adcValue = adc.get(id)
     adc.close(id)
@@ -24,18 +24,18 @@ function getADC(id)
     end
 end
 
-function getDatalink(cid)
+function create.getDatalink(cid)
     if tonumber(cid) then
         return datalink[cid]
     else
         return datalink[defChan]
     end
 end
-function setchannel(cid)
+function create.setchannel(cid)
     defChan = tonumber(cid) or 1
     return cid
 end
-function getTimParam()
+function create.getTimParam()
     return interval, samptime
 end
 
@@ -48,7 +48,7 @@ end
 --- 用户串口和远程调用的API接口
 -- @string str：执行API的命令字符串
 -- @retrun str : 处理结果字符串
-function userapi(str)
+function create.userapi(str)
     local t = str:match("(.+)\r\n") and dtulib.split(str:match("(.+)\r\n"),',') or dtulib.split(str,',')
     local first = table.remove(t, 1)
     local second = table.remove(t, 1) or ""
@@ -185,7 +185,7 @@ local function tcpTask(dName, cid, pios, reg, convert, passon, upprot, dwprot, p
                     log.info("收到服务器数据，长度", rx_buff:used())
                     local data = rx_buff:toStr(0, rx_buff:used())
                     if data:sub(1, 5) == "rrpc," or data:sub(1, 7) == "config," then
-                        local res, msg = pcall(userapi, data, pios)
+                        local res, msg = pcall(create.userapi, data, pios)
                         if not res then
                             log.error("远程查询的API错误:", msg)
                         end
@@ -481,7 +481,7 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
                         -- 这里执行用户自定义的指令
                         if payload:sub(1, 5) == "rrpc," or payload:sub(1, 7) == "config," then
                             log.info("进到这里了1")
-                            local res, msg = pcall(userapi, payload, pios)
+                            local res, msg = pcall(create.userapi, payload, pios)
                             if not res then
                                 log.error("远程查询的API错误:", msg)
                             end
@@ -763,7 +763,7 @@ function dev_txiotnew(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive
 end
 
 ---------------------------------------------------------- 参数配置,任务转发，线程守护主进程----------------------------------------------------------
-function connect(pios, conf, reg, convert, passon, upprot, dwprot, webProtect, protectContent)
+function create.connect(pios, conf, reg, convert, passon, upprot, dwprot, webProtect, protectContent)
     local flyTag = false
     if mobile.status() ~= 1 and not sys.waitUntil("IP_READY", rstTim) then
         dtulib.restart("网络初始化失败!")
@@ -917,10 +917,4 @@ sys.subscribe("IP_LOSE", function(adapter)
     log.info("mobile", "IP_LOSE", (adapter or -1) == socket.LWIP_GP)
 end)
 
-return {
-    getDatalink = getDatalink,
-    setchannel = setchannel,
-    getTimParam = getTimParam,
-    connect = connect,
-    userapi=userapi,
-}
+return create
