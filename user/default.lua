@@ -581,7 +581,9 @@ cmd.rrpc = {
         end
         return "rrpc,setchannel,OK" 
     end,
-    ["reboot"] = function(t)sys.timerStart(dtulib.restart, 1000, "Remote reboot!") return "OK" end,
+    ["reboot"] = function(t)
+        sys.timerStart(dtulib.restart, 1000, "Remote reboot!") 
+        return "OK" end,
     ["getimei"] = function(t) return "rrpc,getimei," .. (mobile.imei() or "error") end,
     ["getmuid"] = function(t) return "rrpc,getmuid," .. (mobile.muid() or "error") end,
     ["getimsi"] = function(t) return "rrpc,getimsi," .. (mobile.imsi() or "error") end,
@@ -601,9 +603,8 @@ cmd.rrpc = {
         return "rrpc,location," .. (lbs.lat or 0) .. "," .. (lbs.lng or 0)
     end,
     ["gettime"] = function(t)
-        local c = rtc.get()
-        log.info("C",json.encode(c))
-        return "rrpc,nettime," .. string.format("%04d,%02d,%02d,%02d,%02d,%02d\r\n", c.year, c.mon, c.day, c.hour, c.min, c.sec)
+        local t = os.date("*t")
+        return "rrpc,nettime," .. string.format("%04d-%02d-%02d %02d:%02d:%02d", t.year,t.month,t.day,t.hour,t.min,t.sec)
     end,
     ["setpio"] = function(t) 
         if pios["pio" .. t[1]] and (tonumber(t[2]) > -1 and tonumber(t[2]) < 2) then 
@@ -680,7 +681,7 @@ local function read(uid, idx)
         end
         --local t = str:match("(.+)\r\n") and str:match("(.+)\r\n"):split(',') or str:split(',')
         local t = str:match("(.+)\r\n") and dtulib.split(str:match("(.+)\r\n"),',') or dtulib.split(str,',')
-        if not mobile.status() ~= 1 then write(uid, "NET_NORDY\r\n") return end
+        if not mobile.status() == 1 then write(uid, "NET_NORDY\r\n") return end
         sys.taskInit(function(t, uid)
             local code, head, body = dtulib.request(t[2]:upper(), t[3],t[8],nil, jsonstr or t[5], tonumber(t[6]) or 1, t[7])
             log.info("uart http response:", body)
