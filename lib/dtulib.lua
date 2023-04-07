@@ -39,20 +39,33 @@ end
 
 local Content_type = {'application/x-www-form-urlencoded', 'application/json', 'application/octet-stream'}
 
---- 处理表的url编码
--- @table query: 需要转码的查询表
--- @return string: 经过urlEncode转换后的字符串
--- @usage local q = table.urlEncode({a="1",b="2"})
-function urlEncode(query)
-    local msg = {}
-    for k, v in pairs(query) do
-        if type(k) == "number" then
-            table.insert(msg, tostring(v):urlEncode())
+--- 返回utf8编码字符串的单个utf8字符的table
+-- @string str，utf8编码的字符串,支持中文
+-- @return table,utf8字符串的table
+-- @usage local t = string.utf8ToTable("中国2018")
+function utf8ToTable(str)
+    local tab = {}
+    for uchar in string.gmatch(str, "[%z\1-\127\194-\244][\128-\191]*") do
+        tab[#tab + 1] = uchar
+    end
+    return tab
+end
+
+--- 返回字符串的urlEncode编码
+-- @string str，要转换编码的字符串,支持UTF8编码中文
+-- @return str,urlEncode编码的字符串
+-- @usage local str = string.urlEncode("####133") ,str == "%23%23%23%23133"
+-- @usage local str = string.urlEncode("中国2018") , str == "%e4%b8%ad%e5%9b%bd2018"
+function urlEncode(str)
+    local t = utf8ToTable(str)
+    for i = 1, #t do
+        if #t[i] == 1 then
+            t[i] = string.gsub(string.gsub(t[i], "([^%w_%*%.%- ])", function(c) return string.format("%%%02X", string.byte(c)) end), " ", "+")
         else
-            table.insert(msg, k:urlEncode() .. "=" .. tostring(v):urlEncode())
+            t[i] = string.gsub(t[i], ".", function(c) return string.format("%%%02X", string.byte(c)) end)
         end
     end
-    return table.concat(msg, "&")
+    return table.concat(t)
 end
 
 -- 处理表的url编码
@@ -162,6 +175,13 @@ function dtulib.split(str, delimiter)
         end
     end
     return strlist
+end
+--- 将序列化的lua字符串反序列化为lua基本类型
+-- @string str: 序列化后的基本类型字符串
+-- @return param: 反序列化为 number or table or string or boolean
+-- @usage local v = string.unSerialize("true") --> v为布尔值True
+function dtulib.unSerialize(str)
+    return loadstring("return " .. str)()
 end
 
 return dtulib

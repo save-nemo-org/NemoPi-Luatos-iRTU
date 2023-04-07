@@ -78,6 +78,11 @@ function default.setLocation(lat, lng)
     log.info("基站定位请求的结果:", lat, lng)
 end
 
+sys.timerLoopStart(function ()
+    -- log.info("RTOS>MEMINFO",rtos.meminfo("sys"))
+    -- log.info("RTOS>MEMINFO2",rtos.meminfo("lua"))
+    collectgarbage()
+end,3000)
 
 ---------------------------------------------------------- 开机读取保存的配置文件 ----------------------------------------------------------
 -- 自动任务采集
@@ -683,7 +688,11 @@ local function read(uid, idx)
         local t = str:match("(.+)\r\n") and dtulib.split(str:match("(.+)\r\n"),',') or dtulib.split(str,',')
         if not mobile.status() == 1 then write(uid, "NET_NORDY\r\n") return end
         sys.taskInit(function(t, uid)
-            local code, head, body = dtulib.request(t[2]:upper(), t[3],t[8],nil, jsonstr or t[5], tonumber(t[6]) or 1, t[7])
+            local httpbody=jsonstr or t[5]
+            if type(dtulib.unSerialize(jsonstr or t[5])) =="table" then
+                httpbody=dtulib.unSerialize(jsonstr or t[5])
+            end
+            local code, head, body = dtulib.request(t[2]:upper(), t[3],t[8],nil, httpbody, tonumber(t[6]) or 1, t[7])
             log.info("uart http response:", body)
             write(uid, body)
         end, t, uid)

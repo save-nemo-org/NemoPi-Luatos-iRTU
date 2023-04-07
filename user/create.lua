@@ -274,7 +274,6 @@ local function tcpTask(dName, cid, pios, reg, convert, passon, upprot, dwprot, p
                     rx_buff:resize(1024)
                 end
                 log.info("RESULT", result, ",DATA", data, ",PARAM", param, ",passon", passon, ",cid", cid, ",UID", uid)
-
             end
         else
             log.info("tcp连接失败了", dName, addr, port)
