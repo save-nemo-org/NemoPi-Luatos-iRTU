@@ -85,7 +85,7 @@ local function conver(str)
             tmp[v] = hex and (mobile.iccid():toHex()) or mobile.iccid()
         end
         if tmp[v]:lower() == "csq" then
-            tmp[v] = hex and string.format("%02X", mobile.rssi()) or tostring(mobile.rssi())
+            tmp[v] = hex and string.format("%02X", mobile.csq()) or tostring(mobile.csq())
         end
     end
     return hex and dtulib.fromHexnew((table.concat(tmp))) or table.concat(tmp)
@@ -96,13 +96,13 @@ local function loginMsg(str)
         return nil
     elseif tonumber(str) == 1 then
         return json.encode({
-            csq = mobile.rssi(),
+            csq = mobile.csq(),
             imei = mobile.imei(),
             iccid = mobile.iccid(),
             ver = _G.VERSION
         })
     elseif tonumber(str) == 2 then
-        return dtulib.fromHexnew(tostring(mobile.rssi())) .. dtulib.fromHexnew((mobile.imei() .. "0")) .. dtulib.fromHexnew(mobile.iccid())
+        return dtulib.fromHexnew(tostring(mobile.csq())) .. dtulib.fromHexnew((mobile.imei() .. "0")) .. dtulib.fromHexnew(mobile.iccid())
     elseif type(str) == "string" and #str ~= 0 then
         return conver(str)
     else
@@ -383,34 +383,37 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
     log.info("MQTT HOST:PORT", addr, port)
     log.info("MQTT clientID,user,pwd", clientID, conver(usr), conver(pwd))
     local idx = 0
+    local mqttc = mqtt.create(nil, addr, port, ssl == "tcp_ssl" and true or false)
+    -- 是否为ssl加密连接,默认不加密,true为无证书最简单的加密，table为有证书的加密
+    mqttc:auth(clientID, conver(usr), conver(pwd))
+    mqttc:keepalive(keepAlive)
+    mqttc:on(function(mqtt_client, event, data, payload) -- mqtt回调注册
+        -- 用户自定义代码，按event处理
+        log.info("mqtt", "event", event, mqtt_client, data, payload)
+        if event == "conack" then
+            sys.publish("mqtt_conack")
+        elseif event == "recv" then -- 服务器下发的数据
+            log.info("mqtt", "downlink", "topic", data, "payload", payload)
+            sys.publish("NET_SENT_RDY_" .. (passon and cid or uid), "recv", data, payload)
+            -- 这里继续加自定义的业务处理逻辑
+        elseif event == "sent" then -- publish成功后的事件
+            log.info("mqtt", "sent", "pkgid", data)
+        elseif event == "disconnect" then
+            -- 非自动重连时,按需重启mqttc
+            -- mqtt_client:connect()
+            sys.publish("NET_SENT_RDY_" .. (passon and cid or uid))
+        end
+    end)
     while true do
+        log.info("chysTest.sendTestTelemetry1", sendTestTelemetryCount, rtos.version(),
+	    "mem.lua", rtos.meminfo("lua"));
         local messageId = false
         if mobile.status() ~= 1 and not sys.waitUntil("IP_READY", rstTim) then
             dtulib.restart("网络初始化失败!")
         end
-        local mqttc = mqtt.create(nil, addr, port, ssl == "tcp_ssl" and true or false)
-        -- 是否为ssl加密连接,默认不加密,true为无证书最简单的加密，table为有证书的加密
-        mqttc:auth(clientID, conver(usr), conver(pwd))
-        mqttc:keepalive(keepAlive)
+
         mqttc:connect()
         -- local mqttc = mqtt.client(clientID, keepAlive, conver(usr), conver(pwd), cleansession, will, "3.1.1")
-        mqttc:on(function(mqtt_client, event, data, payload) -- mqtt回调注册
-            -- 用户自定义代码，按event处理
-            log.info("mqtt", "event", event, mqtt_client, data, payload)
-            if event == "conack" then
-                sys.publish("mqtt_conack")
-            elseif event == "recv" then -- 服务器下发的数据
-                log.info("mqtt", "downlink", "topic", data, "payload", payload)
-                sys.publish("NET_SENT_RDY_" .. (passon and cid or uid), "recv", data, payload)
-                -- 这里继续加自定义的业务处理逻辑
-            elseif event == "sent" then -- publish成功后的事件
-                log.info("mqtt", "sent", "pkgid", data)
-            elseif event == "disconnect" then
-                -- 非自动重连时,按需重启mqttc
-                -- mqtt_client:connect()
-                sys.publish("NET_SENT_RDY_" .. (passon and cid or uid))
-            end
-        end)
         local conres = sys.waitUntil("mqtt_conack", 10000)
         if mqttc:ready() and conres then
             log.info("mqtt连接成功")
