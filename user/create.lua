@@ -69,6 +69,7 @@ local function conver(str)
     str = hex and str:sub(3, -1) or str
     local tmp = dtulib.split(str,"|")
     for v = 1, #tmp do
+        local tmpdata=tmp[v]:lower()
         if tmp[v]:lower() == "sn" then
             tmp[v] = hex and (mobile.sn():toHex()) or mobile.sn()
         end
@@ -87,6 +88,7 @@ local function conver(str)
         if tmp[v]:lower() == "csq" then
             tmp[v] = hex and string.format("%02X", mobile.csq()) or tostring(mobile.csq())
         end
+        if tmpdata==tmp[v] and v>1 then tmp[v] = "|"..tmp[v] end
     end
     return hex and dtulib.fromHexnew((table.concat(tmp))) or table.concat(tmp)
 end
@@ -386,6 +388,7 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
     local mqttc = mqtt.create(nil, addr, port, ssl == "tcp_ssl" and true or false)
     -- 是否为ssl加密连接,默认不加密,true为无证书最简单的加密，table为有证书的加密
     mqttc:auth(clientID, conver(usr), conver(pwd))
+    log.info("KEEPALIVE",keepAlive)
     mqttc:keepalive(keepAlive)
     mqttc:on(function(mqtt_client, event, data, payload) -- mqtt回调注册
         -- 用户自定义代码，按event处理
