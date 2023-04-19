@@ -635,15 +635,16 @@ cmd.rrpc = {
     ["gps_close"] = function(t) sys.publish("REMOTE_CLOSE") return "rrpc,gps_close,ok" end,
     ["upconfig"] = function(t)sys.publish("UPDATE_DTU_CNF") return "rrpc,upconfig,OK" end,
     ["function"] = function(t)log.info("rrpc,function:", table.concat(t, ",")) return "rrpc,function," .. (loadstring(table.concat(t, ","))() or "OK") end,
-    -- ["setSN"] = function(t) log.info("rrpc,getSN,"..mobile.sn(t)) return "rrpc,getSN,"..(mobile.sn() or 0) end,
-    -- ["getSN"] = function(t)
-    --      local sn=mobile.sn()
-    --     if sn then
-    --         log.info("SN",sn)
-    --     else
-    --         log.info("SN2",sn)
-    --     end
-    --     return "rrpc,getSN,"end,
+    ["simcross"] = function(t) 
+        if tonumber(t[1])==1 or tonumber(t[1])==0 then
+            mobile.flymode(0, true)
+            mobile.simid(t[1])
+            mobile.flymode(0, false)
+             return "simcross,ok,"..t[1] 
+        else
+            return "simcross,error,"..t[1]
+        end
+    end,
 }
 
 
