@@ -82,7 +82,7 @@ sys.timerLoopStart(function ()
     -- log.info("RTOS>MEMINFO",rtos.meminfo("sys"))
     -- log.info("RTOS>MEMINFO2",rtos.meminfo("lua"))
     collectgarbage()
-end,3000)
+end,1000)
 
 ---------------------------------------------------------- 开机读取保存的配置文件 ----------------------------------------------------------
 -- 自动任务采集
@@ -812,7 +812,7 @@ function uart_INIT(i, uconf)
     end
     log.info("DEFAULT",default["dir" .. i])
     log.info("rs485us",rs485us)
-    uart.setup(uconf[i][1], uconf[i][2], uconf[i][3], stb,parity,uart.LSB,1024, default["dir" .. i],0,rs485us)
+    uart.setup(uconf[i][1], uconf[i][2], uconf[i][3], stb,parity,uart.LSB,SENDSIZE, default["dir" .. i],0,rs485us)
     uart.on(uconf[i][1], "sent", writeDone)
     if uconf[i][1] == uart.USB or tonumber(dtu.uartReadTime) > 0 then
         uart.on(uconf[i][1], "receive", function(uid, length)

@@ -8,7 +8,7 @@ local datalink, defChan = {}, 1
 local interval, samptime = {0, 0, 0}, {0, 0, 0}
 
 -- 获取经纬度
-local lat, lng = 0, 0
+local latdata, lngdata = 0, 0
 -- 无网络重启时间，飞行模式启动时间
 local rstTim, flyTim = 300000, 300000
 local output, input = {}, {}
@@ -43,6 +43,25 @@ local function netCB(msg)
 	log.info("未处理消息", msg[1], msg[2], msg[3], msg[4])
 end
 
+-- 获取纬度
+function create.getLat()
+    return latdata
+end
+-- 获取经度
+function create.getLng()
+    return lngdata
+end
+-- 获取实时经纬度
+function create.getRealLocation()
+    lbsLoc.request(function(result, lat, lng, addr,time,locType)
+        if result then
+            latdata=lat
+            lngdata=lng
+            --default.setLocation(lat, lng)
+        end
+    end)
+    return latdata, lngdata
+end
 
 
 --- 用户串口和远程调用的API接口

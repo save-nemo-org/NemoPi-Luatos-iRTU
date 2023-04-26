@@ -111,9 +111,9 @@ function dtulib.request(method, url, timeout, params, data, ctype, basic, head, 
         local tmp = {}
         for k, v in string.gmatch(head, "(.-):%s*(.-)\r\n") do tmp[k] = v end
         -- headers = tmp
-        merge(headers, tmp)
+        dtulib.merge(headers, tmp)
     elseif type(head) == "table" then
-        merge(headers, head)
+        dtulib.merge(headers, head)
     end
 
     _, idx, auth = url:find("(.-:.-)@", (offset or 0) + 1)
