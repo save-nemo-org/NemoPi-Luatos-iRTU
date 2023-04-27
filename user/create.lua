@@ -548,6 +548,8 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
                             end
                             -- sys.publish("UART_SENT_RDY_" .. uid, uid, payload)
                         end
+                    elseif ret==false then
+                        log.warn("等待超时了")
                     else
                         log.warn('The MQTTServer connection is broken.')
                         break
