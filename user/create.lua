@@ -391,16 +391,7 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
     end
     local dwprotFnc = dwprot and dwprot[cid] and dwprot[cid] ~= "" and loadstring(dwprot[cid]:match("function(.+)end"))
     local upprotFnc = upprot and upprot[cid] and upprot[cid] ~= "" and loadstring(upprot[cid]:match("function(.+)end"))
-    if not will or will == "" then
-        will = nil
-    else
-        will = {
-            qos = 1,
-            retain = 0,
-            topic = will,
-            payload = mobile.imei()
-        }
-    end
+
     log.info("MQTT HOST:PORT", addr, port)
     log.info("MQTT clientID,user,pwd", clientID, conver(usr), conver(pwd))
     local idx = 0
@@ -426,6 +417,12 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
             sys.publish("NET_SENT_RDY_" .. (passon and cid or uid))
         end
     end)
+    if not will or will == "" then
+        will = nil
+    else
+        mqttc:will(will, mobile.imei(), 1, 0)
+    end
+  
     while true do
         log.info("chysTest.sendTestTelemetry1", sendTestTelemetryCount, rtos.version(),
 	    "mem.lua", rtos.meminfo("lua"));
