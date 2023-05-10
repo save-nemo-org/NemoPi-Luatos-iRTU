@@ -223,7 +223,7 @@ function deviceMessage(format)
             sta = {isOpen(),  sens.vib, sens.acc, sens.act, sens.chg, sens.und, sens.vcc, mobile.csq()}
         })
     else
-        return pack.pack(">b7IHb", 0x55, isOpen() and 1 or 0, sens.vib and 1 or 0,
+        return pack.pack(">b7fb", 0x55, isOpen() and 1 or 0, sens.vib and 1 or 0,
         sens.acc and 1 or 0, sens.act and 1 or 0, sens.chg and 1 or 0, sens.und and 1 or 0, sens.vcc, mobile.csq())
     end
 end
@@ -259,7 +259,7 @@ function locateMessage(format)
     if format:lower() ~= "hex" then
         return json.encode({msg = {isFix, os.time(), lng, lat, altitude, azimuth, speed, sateCnt}})
     else
-        return pack.pack(">b2i3H2b3", 0xAA, isFix and 1 or 0, os.time(), lng, lat, altitude, azimuth, speed, sateCnt)
+        return pack.pack(">b2i3H2b2", 0xAA, isFix and 1 or 0, os.time(), lng, lat, altitude, azimuth, speed, sateCnt)
     end
 end
 
