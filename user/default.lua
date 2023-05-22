@@ -147,7 +147,7 @@ function open(uid,baud,sleep)
     openFlag=true
     tid=sys.timerLoopStart(function()
         -- log.info("Air800 上报GSP信息", getAllMsg())
-        sys.publish("GPS_MSG_REPORT", libgnss.isFix() and 1 or 0)
+        sys.publish("GPS_MSG_REPORT")
     end, sleep * 1000)
 end
 
@@ -318,7 +318,7 @@ function alert(uid, baud, pwmode, sleep, guard, format, num, sep, interval, cid)
                 break
                 end
             end
-            sys.wait(100)
+            --sys.wait(100)
         end
         if  sys.timerIsActive(report,format) then
             sys.timerStop(report,format)
@@ -382,7 +382,7 @@ pios = {
 
 -- 网络READY信号
 if not dtu.pins or not dtu.pins[2] or not pios[dtu.pins[2]] then 
-    netready = gpio.setup(27, 0)
+    netready = gpio.setup(26, 0)
 else
     netready = gpio.setup(tonumber(dtu.pins[2]:sub(4, -1)), 0)
     pios[dtu.pins[2]] = nil
@@ -430,7 +430,7 @@ local function netled(led)
     end
 end
 if not dtu.pins or not dtu.pins[1] or not pios[dtu.pins[1]] then 
-    sys.taskInit(netled,26)
+    sys.taskInit(netled,27)
 else
     sys.taskInit(netled, tonumber(dtu.pins[1]:sub(4, -1)))
     pios[dtu.pins[1]] = nil
@@ -470,6 +470,7 @@ end, 1000)
 
 -- 串口写数据处理
 function write(uid, str,cid)
+    log.info("进到write了")
     uid = tonumber(uid)
     if not str or str == "" or not uid then return end
     if uid == uart.USB then return uart.write(uart.USB, str) end
