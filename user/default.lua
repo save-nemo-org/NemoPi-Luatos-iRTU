@@ -970,7 +970,7 @@ end
 
 
 local function adcWarn(adcid, und, lowv, over, highv, diff, msg, id, sfreq, upfreq, net, note, tel)
-    local upcnt, scancnt, adcValue, voltValue = 0, 0, 0, 0
+    local upcnt, scancnt,voltValue = 0, 0, 0, 0
     diff = tonumber(diff) or 1
     lowv = tonumber(lowv) or 1
     highv = tonumber(highv) or 4200
@@ -981,9 +981,9 @@ local function adcWarn(adcid, und, lowv, over, highv, diff, msg, id, sfreq, upfr
             -- if adcid == 0 or adcid == 1 then
                 -- end
                 adc.open(adcid)
-                adcValue, voltValue = adc.read(adcid)
-                if adcValue ~= 0xFFFF or voltValue ~= 0xFFFF then
-                    voltValue = (voltValue - voltValue % 3) / 3
+                voltValue = adc.get(adcid)
+                if voltValue and voltValue ~= 255 then
+                    log.info("ADC的值是",voltValue)
                 end
                 adc.close(adcid)
             scancnt = 0
@@ -1010,7 +1010,7 @@ if dtu.warn and dtu.warn.adc1 and dtu.warn.adc1[1] then
     sys.taskInit(adcWarn, 1, unpack(dtu.warn.adc1))
 end
 if dtu.warn and dtu.warn.vbatt and dtu.warn.vbatt[1] then
-    sys.taskInit(adcWarn, 9, unpack(dtu.warn.vbatt))
+    sys.taskInit(adcWarn,adc.CH_VBAT, unpack(dtu.warn.vbatt))
 end
 
 
