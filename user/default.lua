@@ -708,15 +708,15 @@ local function read(uid, idx)
             --tulib.restart("网络初始化失败！")
         end
         local dName = "dtu"..uid
-        sys.taskInitEx(function(uid, prot, ip, port, ssl, timeout, data)
-            local c = prot:upper() 
+        sysplus.taskInitEx(function(uid, prot, ip, port, ssl, timeout, data)
+            local uid,prot,timeout=tonumber(uid),prot:upper(),tonumber(timeout)
             local netc = socket.create(nil, dName)
-            local isUdp = prot == "TCP" and nil or true
-            local isSsl = ssl and true or nil
+            local isUdp = prot == "UDP" and true or false
+            local isSsl = ssl=="ssl" and true or false
             local rx_buff = zbuff.create(1024)
             socket.config(netc, nil,isUdp,isSsl)
-            libnet.waitLink(dName, 0, netc)
-            result = libnet.connect(dName, timeout, netc, ip, port)
+            local res = libnet.waitLink(dName, 0, netc)
+            local result = libnet.connect(dName, timeout*1000, netc, ip, tonumber(port))
             while not result do sys.wait(2000) end
             local succ, param =libnet.tx(dName, nil, netc, data)
             if succ then
@@ -726,14 +726,14 @@ local function read(uid, idx)
                     log.info("网络异常", result, param) 
                 end
                 local succ, param, _, _ = socket.rx(netc, rx_buff)
-                if succ then 
+                if rx_buff:used() > 0 then 
                     s=rx_buff:toStr()
                     write(uid, s) end
             else
                 write(uid, "SEND_ERR\r\n")
             end
             socket.close(netc)
-        end, dName, function() end, uid, s:match("(.-),(.-),(.-),(.-),(.-),(.+)"))
+        end,dName,function () end,uid, s:match("(.-),(.-),(.-),(.-),(.-),(.+)"))
         return
     end
     -- 添加设备识别码
