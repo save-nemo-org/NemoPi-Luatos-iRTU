@@ -217,7 +217,6 @@ end
 -- sta = {"isopen", "vib", "acc", "act", "chg", "und", "volt", "vbat", "csq"}
 -- 远程获取gps的信息。
 function deviceMessage(format)
-    log.info("进到DEVICE里面来了啊")
     if format:lower() ~= "hex" then
         return json.encode({
             sta = {isOpen(),  sens.vib, sens.acc, sens.act, sens.chg, sens.und, sens.vcc, mobile.csq()}
@@ -270,7 +269,7 @@ function alert(uid, baud, pwmode, sleep, guard, format, num, sep, interval, cid)
     interval = (tonumber(interval) or 0) * 60000
     local cnt=0
     local report = function(format)
-        sys.publish("NET_SENT_RDY_" .. tonumber(cid) or uid, deviceMessage(format)) end
+        sys.publish("NET_SENT_RDY_" .. cid and tonumber(cid) or uid, deviceMessage(format)) end
     while true do
         -- 布防判断
         sys.wait(3000)
@@ -304,12 +303,12 @@ function alert(uid, baud, pwmode, sleep, guard, format, num, sep, interval, cid)
             if sys.waitUntil("GPS_MSG_REPORT",1000) then
                 log.info("进到这里来了GPS_MSG_REPORT")
                 if num == 0 then
-                    sys.publish("NET_SENT_RDY_" .. tonumber(cid) or uid, locateMessage(format))
+                    sys.publish("NET_SENT_RDY_" ..  cid and tonumber(cid) or uid, locateMessage(format))
                 else
                     cnt = cnt < num and cnt + 1 or 0
                     table.insert(trackFile, locateMessage(format))
                     if cnt == 0 then 
-                        sys.publish("NET_SENT_RDY_" .. tonumber(cid) or uid, table.concat(trackFile, sep)) 
+                        sys.publish("NET_SENT_RDY_" ..  cid and tonumber(cid) or uid, table.concat(trackFile, sep)) 
                         trackFile={}
                     end     
                 end

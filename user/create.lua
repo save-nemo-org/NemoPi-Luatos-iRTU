@@ -216,7 +216,7 @@ local function tcpTask(dName, cid, pios, reg, convert, passon, upprot, dwprot, p
                                 log.error("数据流模版错误:", msg)
                             end
                         end
-                        if not socket.tx(netc, msg) then
+                        if not libnet.tx(dName, nil, netc, msg) then
                             break
                         end
                     elseif convert == 1 then -- 转换HEX String
