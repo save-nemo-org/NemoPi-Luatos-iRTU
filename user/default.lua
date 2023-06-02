@@ -727,7 +727,7 @@ local function read(uid, idx)
                 end
                 local succ, param, _, _ = socket.rx(netc, rx_buff)
                 if rx_buff:used() > 0 then 
-                    s=rx_buff:toStr()
+                    s=rx_buff:toStr(0, rx_buff:used())
                     write(uid, s) end
             else
                 write(uid, "SEND_ERR\r\n")
