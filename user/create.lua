@@ -207,13 +207,17 @@ local function tcpTask(dName, cid, pios, reg, convert, passon, upprot, dwprot, p
                     local data = rx_buff:toStr(0, rx_buff:used())
                     if data:sub(1, 5) == "rrpc," or data:sub(1, 7) == "config," then
                         local res, msg = pcall(create.userapi, data, pios)
-                        if not res then
-                            log.error("远程查询的API错误:", msg)
-                        end
+                            if not res then
+                                log.error("远程查询的API错误:", msg)
+                            end
                         if convert == 0 and upprotFnc then -- 转换为用户自定义报文
-                            res, msg = pcall(upprotFnc, msg)
+                            res, msg = pcall(upprotFnc, data)
                             if not res then
                                 log.error("数据流模版错误:", msg)
+                            end
+                            res, msg = pcall(create.userapi, msg, pios)
+                            if not res then
+                                log.error("远程查询的API错误:", msg)
                             end
                         end
                         if not libnet.tx(dName, nil, netc, msg) then
@@ -507,9 +511,13 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
                                 log.error("远程查询的API错误:", msg)
                             end
                             if convert == 0 and upprotFnc then -- 转换为用户自定义报文
-                                res, msg = pcall(upprotFnc, msg)
+                                res, msg = pcall(upprotFnc,payload)
                                 if not res then
                                     log.error("数据流模版错误:", msg)
+                                end
+                                res, msg = pcall(create.userapi, msg, pios)
+                                if not res then
+                                    log.error("远程查询的API错误:", msg)
                                 end
                             end
                             if not mqttc:publish(pub[1], msg, tonumber(pub[2]) or qos, retain) then
