@@ -2,6 +2,7 @@ create = {}
 
 libnet = require "libnet"
 dtulib = require "dtulib"
+local lbsLoc = require("lbsLoc")
 
 local datalink, defChan = {}, 1
 -- 定时采集任务的参数
