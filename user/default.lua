@@ -81,6 +81,7 @@ end
 sys.timerLoopStart(function ()
     -- log.info("RTOS>MEMINFO",rtos.meminfo("sys"))
     -- log.info("RTOS>MEMINFO2",rtos.meminfo("lua"))
+    -- log.info("fs.fsstat(path)",fs.fsstat("/"))
     collectgarbage()
 end,1000)
 
@@ -435,7 +436,7 @@ else
     pios[dtu.pins[1]] = nil
 end
 ---------------------------------------------------------- DTU 任务部分 ----------------------------------------------------------
--- 配置串口
+
 if dtu.pwrmod ~= "energy" then 
     pm.request(pm.IDLE) 
 else
@@ -638,7 +639,7 @@ cmd.rrpc = {
     ["simcross"] = function(t) 
         if tonumber(t[1])==1 or tonumber(t[1])==0 then
             mobile.flymode(0, true)
-            mobile.simid(t[1])
+            mobile.simid(tonumber(t[1]))
             mobile.flymode(0, false)
              return "simcross,ok,"..t[1] 
         else
@@ -740,6 +741,7 @@ local function read(uid, idx)
     if tonumber(dtu.passon) == 1 then
         log.info("进到识别码里面来了")
         local interval, samptime = create.getTimParam()
+
         log.info("INTERVAL",interval[uid],samptime[uid])
         if interval[uid] > 0 then -- 定时采集透传模式
             --如果定时采集间隔>0，证明有定时采集间隔
@@ -922,6 +924,7 @@ local uidgps = dtu.gps and dtu.gps.fun and tonumber(dtu.gps.fun[1])
 if uidgps ~= 1 and dtu.uconf and dtu.uconf[1] and tonumber(dtu.uconf[1][1]) == 1 then
     uart_INIT(1, dtu.uconf) end
 if uidgps ~= 2 and dtu.uconf and dtu.uconf[2] and tonumber(dtu.uconf[2][1]) == 2 then uart_INIT(2, dtu.uconf) end
+-- if uidgps ~= 3 and dtu.uconf and dtu.uconf[3] and tonumber(dtu.uconf[3][1]) == 3 then uart_INIT(3, dtu.uconf) end
 
 -- 启动GPS任务
 if uidgps then
