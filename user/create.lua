@@ -6,7 +6,7 @@ local lbsLoc = require("lbsLoc")
 
 local datalink, defChan = {}, 1
 -- 定时采集任务的参数
-local interval, samptime = {0, 0, 0}, {0, 0, 0}
+local interval, samptime = { 0, 0, 0 }, { 0, 0, 0 }
 
 -- 获取经纬度
 local latdata, lngdata = 0, 0
@@ -32,44 +32,47 @@ function create.getDatalink(cid)
         return datalink[defChan]
     end
 end
+
 function create.setchannel(cid)
     defChan = tonumber(cid) or 1
     return cid
 end
+
 function create.getTimParam()
     return interval, samptime
 end
 
 local function netCB(msg)
-	log.info("未处理消息", msg[1], msg[2], msg[3], msg[4])
+    log.info("未处理消息", msg[1], msg[2], msg[3], msg[4])
 end
 
 -- 获取纬度
 function create.getLat()
     return latdata
 end
+
 -- 获取经度
 function create.getLng()
     return lngdata
 end
+
 -- 获取实时经纬度
 function create.getRealLocation()
-    lbsLoc.request(function(result, lat, lng, addr,time,locType)
+    lbsLoc.request(function(result, lat, lng, addr, time, locType)
         if result then
-            latdata=lat
-            lngdata=lng
+            latdata = lat
+            lngdata = lng
             --default.setLocation(lat, lng)
         end
     end)
     return latdata, lngdata
 end
 
-
 --- 用户串口和远程调用的API接口
 -- @string str：执行API的命令字符串
 -- @retrun str : 处理结果字符串
 function create.userapi(str)
-    local t = str:match("(.+)\r\n") and dtulib.split(str:match("(.+)\r\n"),',') or dtulib.split(str,',')
+    local t = str:match("(.+)\r\n") and dtulib.split(str:match("(.+)\r\n"), ',') or dtulib.split(str, ',')
     local first = table.remove(t, 1)
     local second = table.remove(t, 1) or ""
     if tonumber(second) and tonumber(second) > 0 and tonumber(second) < 8 then
@@ -80,6 +83,7 @@ function create.userapi(str)
         return "ERROR\r\n"
     end
 end
+
 ---------------------------------------------------------- DTU的网络任务部分 ----------------------------------------------------------
 local function conver(str)
     if str:match("function(.+)end") then
@@ -87,9 +91,9 @@ local function conver(str)
     end
     local hex = str:sub(1, 2):lower() == "0x"
     str = hex and str:sub(3, -1) or str
-    local tmp = dtulib.split(str,"|")
+    local tmp = dtulib.split(str, "|")
     for v = 1, #tmp do
-        local tmpdata=tmp[v]:lower()
+        local tmpdata = tmp[v]:lower()
         if tmp[v]:lower() == "sn" then
             tmp[v] = hex and (mobile.sn():toHex()) or mobile.sn()
         end
@@ -108,7 +112,7 @@ local function conver(str)
         if tmp[v]:lower() == "csq" then
             tmp[v] = hex and string.format("%02X", mobile.csq()) or tostring(mobile.csq())
         end
-        if tmpdata==tmp[v] and v>1 then tmp[v] = "|"..tmp[v] end
+        if tmpdata == tmp[v] and v > 1 then tmp[v] = "|" .. tmp[v] end
     end
     return hex and dtulib.fromHexnew((table.concat(tmp))) or table.concat(tmp)
 end
@@ -124,7 +128,8 @@ local function loginMsg(str)
             ver = _G.VERSION
         })
     elseif tonumber(str) == 2 then
-        return dtulib.fromHexnew(tostring(mobile.csq())) .. dtulib.fromHexnew((mobile.imei() .. "0")) .. dtulib.fromHexnew(mobile.iccid())
+        return dtulib.fromHexnew(tostring(mobile.csq())) ..
+        dtulib.fromHexnew((mobile.imei() .. "0")) .. dtulib.fromHexnew(mobile.iccid())
     elseif type(str) == "string" and #str ~= 0 then
         return conver(str)
     else
@@ -133,7 +138,7 @@ local function loginMsg(str)
 end
 ---------------------------------------------------------- SOKCET 服务 ----------------------------------------------------------
 local function tcpTask(dName, cid, pios, reg, convert, passon, upprot, dwprot, prot, ping, timeout, addr, port, uid, gap,
-    report, intervalTime, ssl, login)
+                       report, intervalTime, ssl, login)
     cid, prot, timeout, uid = tonumber(cid) or 1, prot:upper(), tonumber(timeout) or 120, tonumber(uid) or 1
     local outputSocket = {}
     if not ping or ping == "" then
@@ -157,20 +162,22 @@ local function tcpTask(dName, cid, pios, reg, convert, passon, upprot, dwprot, p
     end
     sys.subscribe("NET_SENT_RDY_" .. (passon and cid or uid), subMessage)
 
+    local isUdp = prot == "UDP" and true or false
+    local isSsl = ssl == "ssl" and true or false
+    -- local isUdp = false
+    -- local isSsl = false
+    log.info("DNAME", dName, isUdp, isSsl, addr, prot, ping, port)
+    socket.debug(netc, true)
+    socket.config(netc, nil, isUdp, isSsl)
     while true do
         if mobile.status() ~= 1 and not sys.waitUntil("IP_READY", rstTim) then
             dtulib.restart("网络初始化失败！")
         end
-        local isUdp = prot == "UDP" and true or false
-        local isSsl = ssl == "ssl" and true or false
-        -- local isUdp = false
-        -- local isSsl = false
-        log.info("DNAME", dName, isUdp, isSsl, addr, prot, ping, port)
-        socket.debug(netc, true)
-        socket.config(netc, nil,isUdp,isSsl)
+
         local res = libnet.waitLink(dName, 0, netc)
-        local result = libnet.connect(dName, timeout*1000, netc, addr, port)
+        local result = libnet.connect(dName, timeout * 1000, netc, addr, port)
         if result then
+            idx = 0
             log.info("tcp连接成功", dName, addr, port)
             -- 登陆报文
             datalink[cid] = true
@@ -187,7 +194,7 @@ local function tcpTask(dName, cid, pios, reg, convert, passon, upprot, dwprot, p
                 log.info("passon", passon, ",cid", cid, ",UID", uid)
                 local result, param = libnet.wait(dName, timeout * 1000, netc)
                 if not result then
-                    log.info("网络异常", result, param) 
+                    log.info("网络异常", result, param)
                     break
                 end
                 if param == false then
@@ -208,9 +215,9 @@ local function tcpTask(dName, cid, pios, reg, convert, passon, upprot, dwprot, p
                     local data = rx_buff:toStr(0, rx_buff:used())
                     if data:sub(1, 5) == "rrpc," or data:sub(1, 7) == "config," then
                         local res, msg = pcall(create.userapi, data, pios)
-                            if not res then
-                                log.error("远程查询的API错误:", msg)
-                            end
+                        if not res then
+                            log.error("远程查询的API错误:", msg)
+                        end
                         if convert == 0 and upprotFnc then -- 转换为用户自定义报文
                             res, msg = pcall(upprotFnc, data)
                             if not res then
@@ -225,8 +232,8 @@ local function tcpTask(dName, cid, pios, reg, convert, passon, upprot, dwprot, p
                             break
                         end
                     elseif convert == 1 then -- 转换HEX String
-                        local datahex1=dtulib.fromHexnew(data)
-                        sys.publish("NET_RECV_WAIT_" .. uid, uid,datahex1)
+                        local datahex1 = dtulib.fromHexnew(data)
+                        sys.publish("NET_RECV_WAIT_" .. uid, uid, datahex1)
                     elseif convert == 0 and dwprotFnc then -- 转换用户自定义报文
                         local res, msg = pcall(dwprotFnc, data)
                         if not res or not msg then
@@ -238,16 +245,16 @@ local function tcpTask(dName, cid, pios, reg, convert, passon, upprot, dwprot, p
                         sys.publish("NET_RECV_WAIT_" .. uid, uid, data)
                     end
                     -- uart.tx(uart_id, rx_buff)
-                    log.info("RXBUFF1",rx_buff)
+                    log.info("RXBUFF1", rx_buff)
                     rx_buff:del()
-                    log.info("RXBUFF2",rx_buff)
+                    log.info("RXBUFF2", rx_buff)
                 end
                 tx_buff:copy(nil, table.concat(outputSocket))
-                outputSocket={}
+                outputSocket = {}
                 if tx_buff:used() > 0 then
                     local data = tx_buff:toStr(0, tx_buff:used())
                     if convert == 1 then -- 转换为Hex String 报文
-                        local datahex=data:toHex()
+                        local datahex = data:toHex()
                         local result, param = libnet.tx(dName, nil, netc, datahex)
                         if not result then
                             if passon then
@@ -261,7 +268,7 @@ local function tcpTask(dName, cid, pios, reg, convert, passon, upprot, dwprot, p
                         if not res or not msg then
                             log.error("数据流模版错误:", msg)
                         else
-                            log.info("RES",res,msg)
+                            log.info("RES", res, msg)
                             local succ, param = libnet.tx(dName, nil, netc, res and msg or data)
                             -- TODO 缓冲区满的情况
                             if not succ then
@@ -313,11 +320,11 @@ local function tcpTask(dName, cid, pios, reg, convert, passon, upprot, dwprot, p
 end
 ---------------------------------------------------------- MQTT 服务 ----------------------------------------------------------
 local function listTopic(str, addImei, ProductKey, deviceName)
-    log.info("STR",str)
+    log.info("STR", str)
     --local topics = str:split(";")
-    local topics = dtulib.split(str,";")
+    local topics = dtulib.split(str, ";")
     for key, value in pairs(topics) do
-        log.info("KEYv",key,value)
+        log.info("KEYv", key, value)
     end
     if #topics == 1 and (not addImei or addImei == "") then
         topics[1] = topics[1]:sub(-1, -1) == "/" and topics[1] .. mobile.imei() or topics[1] .. "/" .. mobile.imei()
@@ -325,9 +332,9 @@ local function listTopic(str, addImei, ProductKey, deviceName)
         local tmp = {}
         for i = 1, #topics, 2 do
             --tmp = split(topics[i],"/")
-            tmp = dtulib.split(topics[i],"/")
+            tmp = dtulib.split(topics[i], "/")
             for key, value in pairs(tmp) do
-                log.info("KEY2",key,value)
+                log.info("KEY2", key, value)
             end
             for v = 1, #tmp do
                 if tmp[v]:lower() == "imei" then
@@ -368,7 +375,7 @@ local function listTopic(str, addImei, ProductKey, deviceName)
 end
 
 local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive, timeout, addr, port, usr, pwd,
-    cleansession, sub, pub, qos, retain, uid, clientID, addImei, ssl, will, idAddImei, prTopic, cert)
+                        cleansession, sub, pub, qos, retain, uid, clientID, addImei, ssl, will, idAddImei, prTopic, cert)
     cid, keepAlive, timeout, uid = tonumber(cid) or 1, tonumber(keepAlive) or 300, tonumber(timeout), tonumber(uid)
     cleansession, qos, retain = tonumber(cleansession) or 0, tonumber(qos) or 0, tonumber(retain) or 0
     prTopic = prTopic and prTopic or ""
@@ -387,7 +394,7 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
         local topics = {}
         for i = 1, #sub do
             topics[sub[i]] = tonumber(sub[i + 1]) or qos
-            log.info("TOPICS",topics[sub[i]])
+            log.info("TOPICS", topics[sub[i]])
         end
         sub = topics
     end
@@ -403,7 +410,7 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
     local mqttc = mqtt.create(nil, addr, port, ssl == "tcp_ssl" and true or false)
     -- 是否为ssl加密连接,默认不加密,true为无证书最简单的加密，table为有证书的加密
     mqttc:auth(clientID, conver(usr), conver(pwd))
-    log.info("KEEPALIVE",keepAlive)
+    log.info("KEEPALIVE", keepAlive)
     mqttc:keepalive(keepAlive)
     mqttc:on(function(mqtt_client, event, data, payload) -- mqtt回调注册
         -- 用户自定义代码，按event处理
@@ -427,10 +434,10 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
     else
         mqttc:will(will, mobile.imei(), 1, 0)
     end
-  
+
     while true do
         log.info("chysTest.sendTestTelemetry1", sendTestTelemetryCount, rtos.version(),
-	    "mem.lua", rtos.meminfo("lua"));
+            "mem.lua", rtos.meminfo("lua"));
         local messageId = false
         if mobile.status() ~= 1 and not sys.waitUntil("IP_READY", rstTim) then
             dtulib.restart("网络初始化失败!")
@@ -447,7 +454,7 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
             if mqttc:subscribe(sub, qos) then
                 -- local a=mqttc:subscribe(topic3,1)
                 log.info("mqtt订阅成功")
-                -- mqttc:publish(pub, "hello,server", qos) 
+                -- mqttc:publish(pub, "hello,server", qos)
                 if loginMsg(reg) then
                     mqttc:publish(pub[1], loginMsg(reg), tonumber(pub[2]) or qos, retain)
                 end
@@ -459,7 +466,7 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
                     log.info("RET", ret, topic, data, payload)
                     if ret and topic ~= "recv" then
                         if convert == 1 then -- 转换为Hex String 报文
-                            datahex=topic:toHex()
+                            datahex = topic:toHex()
                             if not mqttc:publish(pub[1], datahex, tonumber(pub[2]) or qos, retain) then
                                 if passon then
                                     sys.publish("UART_SENT_RDY_" .. uid, uid, "SEND_ERROR\r\n")
@@ -473,10 +480,10 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
                             else
                                 index = tonumber(index) or 1
                                 local pub_topic = (pub[index]:sub(-1, -1) == "+" and messageId) and
-                                                      pub[index]:sub(1, -2) .. messageId or pub[index]
+                                    pub[index]:sub(1, -2) .. messageId or pub[index]
                                 log.info("-----发布的主题:", pub_topic)
                                 if not mqttc:publish(pub_topic, res and msg or topic, tonumber(pub[index + 1]) or qos,
-                                    retain) then
+                                        retain) then
                                     if passon then
                                         sys.publish("UART_SENT_RDY_" .. uid, uid, "SEND_ERROR\r\n")
                                     end
@@ -485,7 +492,7 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
                             end
                         else
                             local pub_topic = (pub[1]:sub(-1, -1) == "+" and messageId) and pub[1]:sub(1, -2) ..
-                                                  messageId or pub[1]
+                                messageId or pub[1]
                             log.info("-----发布的主题:", pub_topic)
                             if not mqttc:publish(pub_topic, topic, tonumber(pub[2]) or qos, retain) then
                                 if passon then
@@ -494,7 +501,7 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
                                 break
                             end
                         end
-                            messageId = false
+                        messageId = false
                         if passon then
                             sys.publish("UART_SENT_RDY_" .. uid, uid, "SEND_OK\r\n")
                         end
@@ -512,7 +519,7 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
                                 log.error("远程查询的API错误:", msg)
                             end
                             if convert == 0 and upprotFnc then -- 转换为用户自定义报文
-                                res, msg = pcall(upprotFnc,payload)
+                                res, msg = pcall(upprotFnc, payload)
                                 if not res then
                                     log.error("数据流模版错误:", msg)
                                 end
@@ -536,7 +543,7 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
                                 if prTopic == "1" then
                                     sys.publish("UART_SENT_RDY_" .. uid, uid,
                                         res and ("[+MSUB:" .. data .. "," .. #msg .. "," .. msg .. "]") or
-                                            ("[+MSUB:" .. data .. "," .. #payload .. "," .. payload .. "]"))
+                                        ("[+MSUB:" .. data .. "," .. #payload .. "," .. payload .. "]"))
                                 else
                                     sys.publish("UART_SENT_RDY_" .. uid, uid, res and msg or payload)
                                 end
@@ -554,7 +561,7 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
                             end
                             -- sys.publish("UART_SENT_RDY_" .. uid, uid, payload)
                         end
-                    elseif ret==false then
+                    elseif ret == false then
                         log.warn("等待超时了")
                     else
                         log.warn('The MQTTServer connection is broken.')
@@ -583,7 +590,7 @@ end
 ---------------------------------------------------------- OneNet 云服务器 ----------------------------------------------------------
 -- onenet新版 mqtt 协议支持
 local function oneNet_mqtt(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive, timeout, addr, port, productId,
-    productSecret, deviceName, sub, pub, cleansession, qos, retain, uid)
+                           productSecret, deviceName, sub, pub, cleansession, qos, retain, uid)
     cid, keepAlive, timeout, uid = tonumber(cid) or 1, tonumber(keepAlive) or 300, tonumber(timeout), tonumber(uid)
     cleansession, qos, retain = tonumber(cleansession) or 0, tonumber(qos) or 0, tonumber(retain) or 0
     if timeout then
@@ -610,7 +617,6 @@ local function oneNet_mqtt(cid, pios, reg, convert, passon, upprot, dwprot, keep
     end
     mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive, timeout, addr, port, username, password,
         cleansession, sub, pub, qos, retain, uid, clinentId, addImei, ssl, will, "1")
-
 end
 ---------------------------------------------------------- 阿里IOT云 ----------------------------------------------------------
 local alikey = "/alikey.cnf"
@@ -627,12 +633,12 @@ local function getOneSecret(RegionId, ProductKey, ProductSecret)
     local random = 2717
     local data = "deviceName" .. mobile.imei() .. "productKey" .. ProductKey .. "random" .. random
     local sign = crypto.hmac_md5(data, ProductSecret)
-    local body = "productKey=" .. ProductKey .. "&deviceName=" .. mobile.imei() .. "&random=" .. random .. "&sign=" ..sign .. "&signMethod=HmacMD5"
+    local body = "productKey=" ..
+    ProductKey .. "&deviceName=" .. mobile.imei() .. "&random=" .. random .. "&sign=" .. sign .. "&signMethod=HmacMD5"
     for i = 1, 3 do
         local code, head, body = dtulib.request("POST",
-            "https://iot-auth." .. RegionId .. ".aliyuncs.com/auth/register/device",10000, nil, body,1)
+            "https://iot-auth." .. RegionId .. ".aliyuncs.com/auth/register/device", 10000, nil, body, 1)
         if tonumber(code) == 200 and body then
-
             local dat, result, errinfo = json.decode(body)
             if result and dat.message and dat.data then
                 io.writeFile(alikey, body)
@@ -653,7 +659,7 @@ end
 
 -- 一机一密方案，所有方案最终都会到这里执行
 local function aliyunOmok(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive, timeout, RegionId, ProductKey,
-    deviceSecret, deviceName, ver, cleansession, qos, uid, sub, pub)
+                          deviceSecret, deviceName, ver, cleansession, qos, uid, sub, pub)
     cid, keepAlive, timeout, uid = tonumber(cid) or 1, tonumber(keepAlive) or 300, tonumber(timeout), tonumber(uid)
     cleansession, qos = tonumber(cleansession) or 0, tonumber(qos) or 0
     local data = "clientId" .. mobile.iccid() .. "deviceName" .. deviceName .. "productKey" .. ProductKey
@@ -664,7 +670,7 @@ local function aliyunOmok(cid, pios, reg, convert, passon, upprot, dwprot, keepA
     local port = 1883
     if type(sub) ~= "string" or sub == "" then
         sub = ver:lower() == "basic" and "/" .. ProductKey .. "/" .. deviceName .. "/get" or "/" .. ProductKey .. "/" ..
-                  deviceName .. "/user/get"
+            deviceName .. "/user/get"
     else
         sub = listTopic(sub, "addImei", ProductKey, deviceName)
         local topics = {}
@@ -676,7 +682,7 @@ local function aliyunOmok(cid, pios, reg, convert, passon, upprot, dwprot, keepA
     if type(pub) ~= "string" or pub == "" then
         pub =
             ver:lower() == "basic" and "/" .. ProductKey .. "/" .. deviceName .. "/update" or "/" .. ProductKey .. "/" ..
-                deviceName .. "/user/update"
+            deviceName .. "/user/update"
     else
         pub = listTopic(pub, "addImei", ProductKey, deviceName)
     end
@@ -684,12 +690,11 @@ local function aliyunOmok(cid, pios, reg, convert, passon, upprot, dwprot, keepA
     local upprotFnc = upprot and upprot[cid] and upprot[cid] ~= "" and loadstring(upprot[cid]:match("function(.+)end"))
     mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive, timeout, addr, port, usr, pwd, cleansession,
         sub, pub, qos, retain, uid, clientID, "addImei", ssl, will, "1")
-
 end
 
 -- 一型一密认证方案
 local function aliyunOtok(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive, timeout, RegionId, ProductKey,
-    ProductSecret, ver, cleansession, qos, uid, sub, pub)
+                          ProductSecret, ver, cleansession, qos, uid, sub, pub)
     local deviceName, deviceSecret = getOneSecret(RegionId, ProductKey, ProductSecret)
     if not deviceName or not deviceSecret then
         log.error("阿里云注册失败:", ProductKey, ProductSecret)
@@ -703,7 +708,7 @@ end
 
 
 function dev_txiotnew(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive, timeout, Region, deviceName,
-    ProductId, ProductSecret, sub, pub, cleansession, qos, uid)
+                      ProductId, ProductSecret, sub, pub, cleansession, qos, uid)
     enrol_end = false
     deviceName = deviceName ~= "" and deviceName or mobile.imei()
     if not io.exists("/qqiot.dat") then
@@ -711,10 +716,10 @@ function dev_txiotnew(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive
         local nonce = math.random(1, 100)
         -- local version = "2018-06-14"
         -- local data = {ProductId = ProductId, DeviceName = misc.getImei()}
-       
+
         local timestamp = os.time()
         local data = "deviceName=" .. deviceName .. "&nonce=" .. nonce .. "&productId=" .. ProductId .. "&timestamp=" ..
-                         timestamp
+            timestamp
         log.info("deviceNAME", deviceName)
         local hmac_sha1_data = crypto.hmac_sha1(data, ProductSecret):lower()
         local signature = crypto.base64_encode(hmac_sha1_data)
@@ -763,7 +768,7 @@ function dev_txiotnew(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive
         string.sub(ProductSecret, 1, 16), "0000000000000000"))
     local pwd
     if payload.encryptionType == 2 then
-        local raw_key = crypto.base64_decode(payload.psk) -- 生成 MQTT 的 设备密钥 部分
+        local raw_key = crypto.base64_decode(payload.psk)               -- 生成 MQTT 的 设备密钥 部分
         pwd = crypto.hmac_sha256(usr, raw_key):lower() .. ";hmacsha256" -- 根据物联网通信平台规则生成 password 字段
         log.info("PWD", pwd)
     elseif payload.encryptionType == 1 then
@@ -812,25 +817,26 @@ function create.connect(pios, conf, reg, convert, passon, upprot, dwprot, webPro
             log.warn("----------------------- TCP/UDP is start! --------------------------------------")
             --log.info("webProtect", webProtect, protectContent[1])
             local taskName = "DTU_" .. tostring(k)
-            sysplus.taskInitEx(tcpTask, taskName, netCB, taskName, k, pios, reg, convert, passon, upprot, dwprot, unpack(v))
+            sysplus.taskInitEx(tcpTask, taskName, netCB, taskName, k, pios, reg, convert, passon, upprot, dwprot,
+                unpack(v))
         elseif v[1] and v[1]:upper() == "MQTT" then
             log.warn("----------------------- MQTT is start! --------------------------------------")
             sys.taskInit(mqttTask, k, pios, reg, convert, passon, upprot, dwprot, unpack(v, 2))
         elseif v[1] and v[1]:upper() == "HTTP" then
             log.warn("----------------------- HTTP is start! --------------------------------------")
             sys.taskInit(function(cid, convert, passon, upprot, dwprot, uid, method, url, timeout, way, dtype, basic,
-                headers, iscode, ishead, isbody)
+                                  headers, iscode, ishead, isbody)
                 cid, timeout, uid = tonumber(cid) or 1, tonumber(timeout) or 30, tonumber(uid) or 1
                 way, dtype = tonumber(way) or 1, tonumber(dtype) or 1
                 local dwprotFnc = dwprot and dwprot[cid] and dwprot[cid] ~= "" and
-                                      loadstring(dwprot[cid]:match("function(.+)end"))
+                    loadstring(dwprot[cid]:match("function(.+)end"))
                 local upprotFnc = upprot and upprot[cid] and upprot[cid] ~= "" and
-                                      loadstring(upprot[cid]:match("function(.+)end"))
+                    loadstring(upprot[cid]:match("function(.+)end"))
                 while true do
-                    datalink[cid] =  mobile.status() == 1
+                    datalink[cid] = mobile.status() == 1
                     local result, msg = sys.waitUntil("NET_SENT_RDY_" .. (passon and cid or uid))
                     if result and msg then
-                        if convert == 1 then -- 转换为Hex String 报文
+                        if convert == 1 then                   -- 转换为Hex String 报文
                             msg = msg:toHex()
                         elseif convert == 0 and upprotFnc then -- 转换为用户自定义报文
                             local res, dat = pcall(upprotFnc, msg)
@@ -854,8 +860,8 @@ function create.connect(pios, conf, reg, convert, passon, upprot, dwprot, webPro
                         end
                         if convert == 1 then -- 转换HEX String
                             local str = (tonumber(iscode) ~= 1 and code .. "\r\n" or "") ..
-                                            (tonumber(ishead) ~= 1 and headstr or "") ..
-                                            (tonumber(isbody) ~= 1 and body and (dtulib.fromHexnew(body)) or "")
+                                (tonumber(ishead) ~= 1 and headstr or "") ..
+                                (tonumber(isbody) ~= 1 and body and (dtulib.fromHexnew(body)) or "")
                             sys.publish("NET_RECV_WAIT_" .. uid, uid, str)
                         elseif convert == 0 and dwprotFnc then -- 转换用户自定义报文
                             local res, code, head, body = pcall(dwprotFnc, code, head, body)
@@ -863,14 +869,14 @@ function create.connect(pios, conf, reg, convert, passon, upprot, dwprot, webPro
                                 log.error("数据流模版错误:", msg)
                             else
                                 local str = (tonumber(iscode) ~= 1 and code .. "\r\n" or "") ..
-                                                (tonumber(ishead) ~= 1 and headstr or "") ~= 1 ..
-                                                (tonumber(isbody) ~= 1 and body or "")
+                                    (tonumber(ishead) ~= 1 and headstr or "") ~= 1 ..
+                                    (tonumber(isbody) ~= 1 and body or "")
                                 sys.publish("NET_RECV_WAIT_" .. uid, uid, res and str or code)
                             end
                         else -- 默认不转换
                             sys.publish("NET_RECV_WAIT_" .. uid, uid,
                                 (tonumber(iscode) ~= 1 and code .. "\r\n" or "") ..
-                                    (tonumber(ishead) ~= 1 and headstr or "") .. (tonumber(isbody) ~= 1 and body or ""))
+                                (tonumber(ishead) ~= 1 and headstr or "") .. (tonumber(isbody) ~= 1 and body or ""))
                         end
                     end
                     sys.wait(100)
@@ -886,7 +892,7 @@ function create.connect(pios, conf, reg, convert, passon, upprot, dwprot, webPro
             --     sys.wait(1000)
             -- end
             socket.sntp()
-            if v[2]:upper() == "OTOK" then -- 一型一密
+            if v[2]:upper() == "OTOK" then     -- 一型一密
                 sys.taskInit(aliyunOtok, k, pios, reg, convert, passon, upprot, dwprot, unpack(v, 3))
             elseif v[2]:upper() == "OMOK" then -- 一机一密
                 sys.taskInit(aliyunOmok, k, pios, reg, convert, passon, upprot, dwprot, unpack(v, 3))
@@ -935,6 +941,7 @@ function create.connect(pios, conf, reg, convert, passon, upprot, dwprot, webPro
         sys.wait(5000)
     end
 end
+
 -- NTP同步失败强制重启
 -- local tid = sys.timerStart(function()
 --     net.switchFly(true)

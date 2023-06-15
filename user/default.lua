@@ -237,7 +237,13 @@ function locateMessage(format)
     local a, b, speed = libgnss.getIntLocation()
     local gsvTable=libgnss.getGsv()
     local ggaTable=libgnss.getGga()
-    local altitude = ggaTable["altitude"]       --海拔
+    local altitude --海拔
+    if ggaTable["altitude"] then
+        altitude = ggaTable["altitude"]
+    else
+        altitude=0
+    end
+    local azimuth
     if gsvTable["sats"] then
         if gsvTable["sats"][1] then
             if gsvTable["sats"][1]["azimuth"] then
@@ -252,7 +258,12 @@ function locateMessage(format)
         azimuth=0
     end
     log.info("AZIMUTH",azimuth)
-    local sateCnt = ggaTable["satellites_tracked"]   --gga的参与定位的卫星数量
+    local sateCnt   --gga的参与定位的卫星数量
+    if ggaTable["satellites_tracked"] then
+        sateCnt = ggaTable["satellites_tracked"]
+    else
+        sateCnt=0
+    end
     local rmc = libgnss.getRmc(2)
     local lat,lng=rmc.lat, rmc.lng
     log.info("rmc", rmc.lat, rmc.lng)
@@ -821,6 +832,7 @@ function uart_INIT(i, uconf)
             log.info("接收到的数据是",uid,length)
             table.insert(recvBuff[i], uart.read(uconf[i][1], length or 8192))
             sys.timerStart(sys.publish, tonumber(dtu.uartReadTime) or 25, "UART_RECV_WAIT_" .. uconf[i][1], uconf[i][1], i)
+            -- sys.publish("UART_RECV_WAIT_" .. uconf[i][1], uconf[i][1], i)
         end)
     else
         uart.on(uconf[i][1], "receive", function(uid, length)

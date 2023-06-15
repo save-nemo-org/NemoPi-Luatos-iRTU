@@ -26,6 +26,7 @@ end
 -- @... 其他参数和socket.connect一致
 -- @return 失败或者超时返回false 成功返回true
 function libnet.connect(taskName, timeout, ...)
+    sysplus.cleanMsg(taskName)
     local succ, result = socket.connect(...)
     if not succ then return false end
     if not result then
