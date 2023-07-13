@@ -892,9 +892,15 @@ sys.taskInit(function()
         if tonumber(code) == 200 and body then
             log.info("Parameters issued from the server:", body)
             local dat, res, err = json.decode(body)
-            if res and tonumber(dat.param_ver) ~= tonumber(dtu.param_ver) then
-                cfg:import(body)
-                rst = true
+            if dat.pwrmod then
+                if res and tonumber(dat.param_ver) ~= tonumber(dtu.param_ver) then
+                    cfg:import(body)
+                    rst = true
+                end
+            else
+                sys.timerLoopStart(function ()
+                    log.info("没有配置网页端，参数为空，请配置网页端参数")
+                end,3000)
             end
         else
             log.info("COde",code,body,head)

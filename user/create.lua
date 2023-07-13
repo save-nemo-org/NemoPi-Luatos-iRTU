@@ -666,8 +666,13 @@ local function aliyunOmok(cid, pios, reg, convert, passon, upprot, dwprot, keepA
     local usr = deviceName .. "&" .. ProductKey
     local pwd = crypto.hmac_sha1(data, deviceSecret)
     local clientID = mobile.iccid() .. "|securemode=3,signmethod=hmacsha1|"
-    local addr = ProductKey .. ".iot-as-mqtt." .. RegionId .. ".aliyuncs.com"
+    local addr
     local port = 1883
+    if ver:lower() == "basic"then
+        addr = ProductKey .. ".iot-as-mqtt." .. RegionId .. ".aliyuncs.com"
+    else
+        addr = InstanceId..".mqtt.iothub.aliyuncs.com"
+    end
     if type(sub) ~= "string" or sub == "" then
         sub = ver:lower() == "basic" and "/" .. ProductKey .. "/" .. deviceName .. "/get" or "/" .. ProductKey .. "/" ..
             deviceName .. "/user/get"
@@ -694,7 +699,7 @@ end
 
 -- 一型一密认证方案
 local function aliyunOtok(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive, timeout, RegionId, ProductKey,
-                          ProductSecret, ver, cleansession, qos, uid, sub, pub)
+                          ProductSecret, ver, cleansession, qos, uid, sub, pub,InstanceId)
     local deviceName, deviceSecret = getOneSecret(RegionId, ProductKey, ProductSecret)
     if not deviceName or not deviceSecret then
         log.error("阿里云注册失败:", ProductKey, ProductSecret)
@@ -702,7 +707,7 @@ local function aliyunOtok(cid, pios, reg, convert, passon, upprot, dwprot, keepA
     end
     log.warn("一型一密动态注册返回三元组:", deviceName ~= nil, deviceSecret ~= nil)
     aliyunOmok(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive, timeout, RegionId, ProductKey, deviceSecret,
-        deviceName, ver, cleansession, qos, uid, sub, pub)
+        deviceName, ver, cleansession, qos, uid, sub, pub,InstanceId)
 end
 
 
