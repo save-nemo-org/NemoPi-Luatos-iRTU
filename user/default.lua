@@ -227,6 +227,24 @@ function deviceMessage(format)
         sens.acc and 1 or 0, sens.act and 1 or 0, sens.chg and 1 or 0, sens.und and 1 or 0, sens.vcc, mobile.csq())
     end
 end
+local function centToDeg(str)
+    log.info("STRRR",str)
+    if str~=0 and str~="0" and str then
+        local integer, decimal = str:match("(%d+).(%d+)")
+    log.info("INT", math.tointeger(integer), math.tointeger (decimal),#decimal)
+    integer=math.tointeger(integer)
+    
+        local tmp = (integer % 100) * (10 ^ #decimal) + decimal
+        tmp=math.tointeger (tmp)
+        log.info("JIN",tmp,math.tointeger(((integer - integer % 100)) * 10 ^ #decimal + tmp))
+        return math.tointeger(((integer - integer % 100)) * 10 ^ #decimal + tmp)
+    else
+        return 0
+    end
+
+end
+
+
 
 -- 上传定位信息
 -- [是否有效,经度,纬度,海拔,方位角,速度,载噪比,定位卫星,时间戳]
@@ -264,14 +282,19 @@ function locateMessage(format)
     else
         sateCnt=0
     end
-    local rmc = libgnss.getRmc(2)
-    local lat,lng=rmc.lat, rmc.lng
-    log.info("rmc", rmc.lat, rmc.lng)
+    local rmc
+    local lat,lng
     if format:lower() ~= "hex" then
+        rmc = libgnss.getRmc(2)
+        lat,lng=rmc.lat, rmc.lng
+        log.info("rmc", rmc.lat, rmc.lng)
         return json.encode({msg = {isFix, os.time(), lng, lat, altitude, azimuth, speed, sateCnt}})
     else
+        rmc = libgnss.getRmc(1)
+        lat,lng=rmc.lat, rmc.lng
+        log.info("rmc", rmc.lat, rmc.lng)
         log.info("isFix and 1 or 0",isFix and 1 or 0,os.time(), lng, lat, altitude, azimuth, speed, sateCnt)
-        return pack.pack(">b2i3H2b2", 0xAA, isFix and 1 or 0, os.time(), lng, lat, altitude, azimuth, speed, sateCnt)
+        return pack.pack(">b2i3H3b1", 0xAA, isFix and 1 or 0, os.time(), lng, lat, tonumber(string.match(altitude.."",".%d*")), azimuth, speed, sateCnt)
     end
 end
 
@@ -618,7 +641,7 @@ cmd.rrpc = {
                 default.setLocation(lat, lng)
             end
         end)
-        return "rrpc,location," .. (lbs.lat or 0) .. "," .. (lbs.lng or 0)
+        return "rrpc,getreallocation," .. (lbs.lat or 0) .. "," .. (lbs.lng or 0)
     end,
     ["gettime"] = function(t)
         local t = os.date("*t")
@@ -925,6 +948,7 @@ sys.taskInit(function()
         ---------- 启动网络任务 ----------
         log.info("走到这里了")
         sys.publish("DTU_PARAM_READY")
+        mobile.reqCellInfo(60)
         sys.wait(30000)
         ---------- 基站坐标查询 ----------
         lbsLoc.request(function(result, lat, lng, addr,time,locType)
