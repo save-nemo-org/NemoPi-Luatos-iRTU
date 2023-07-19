@@ -270,6 +270,7 @@ function locateMessage(format)
     if format:lower() ~= "hex" then
         return json.encode({msg = {isFix, os.time(), lng, lat, altitude, azimuth, speed, sateCnt}})
     else
+        log.info("isFix and 1 or 0",isFix and 1 or 0,os.time(), lng, lat, altitude, azimuth, speed, sateCnt)
         return pack.pack(">b2i3H2b2", 0xAA, isFix and 1 or 0, os.time(), lng, lat, altitude, azimuth, speed, sateCnt)
     end
 end
@@ -578,7 +579,7 @@ cmd.config = {
 }
 cmd.rrpc = {
     ["getfwver"] = function(t) return "rrpc,getfwver," .. _G.PROJECT .. "_" .. _G.VERSION .. "_" .. rtos.version() end,
-    ["getnetmode"] = function(t) return "rrpc,getnetmode," .. mobile.status() and mobile.status() or 1 end,
+    ["getnetmode"] = function(t) return "rrpc,getnetmode," .. (mobile.status() and mobile.status() or 1) end,
     ["getver"] = function(t) return "rrpc,getver," .. _G.VERSION end,
     ["getcsq"] = function(t) return "rrpc,getcsq," .. (mobile.csq() or "error ") end,
     ["getadc"] = function(t) return "rrpc,getadc," .. create.getADC(tonumber(t[1]) or 0) end,
