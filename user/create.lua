@@ -671,7 +671,7 @@ end
 
 -- 一机一密方案，所有方案最终都会到这里执行
 local function aliyunOmok(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive, timeout, RegionId, ProductKey,
-                          deviceSecret, deviceName, ver, cleansession, qos, uid, sub, pub)
+                          deviceSecret, deviceName, ver, cleansession, qos, uid, sub, pub,InstanceId)
     cid, keepAlive, timeout, uid = tonumber(cid) or 1, tonumber(keepAlive) or 300, tonumber(timeout), tonumber(uid)
     cleansession, qos = tonumber(cleansession) or 0, tonumber(qos) or 0
     local data = "clientId" .. mobile.iccid() .. "deviceName" .. deviceName .. "productKey" .. ProductKey
