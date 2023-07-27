@@ -7,7 +7,7 @@ local lbsLoc = require("lbsLoc")
 local datalink, defChan = {}, 1
 -- 定时采集任务的参数
 local interval, samptime = { 0, 0, 0 }, { 0, 0, 0 }
-
+interval[uart.VUART_0], samptime[uart.VUART_0] = 0, 0
 -- 获取经纬度
 local latdata, lngdata = 0, 0
 -- 无网络重启时间，飞行模式启动时间
@@ -91,28 +91,40 @@ local function conver(str)
     end
     local hex = str:sub(1, 2):lower() == "0x"
     str = hex and str:sub(3, -1) or str
-    local tmp = dtulib.split(str, "|")
+    local tmp = dtulib.split(str,"|")
+    local tmpda1=0
     for v = 1, #tmp do
-        local tmpdata = tmp[v]:lower()
+        local tmpdata=tmp[v]:lower()
+        
         if tmp[v]:lower() == "sn" then
+            tmpda1=1
             tmp[v] = hex and (mobile.sn():toHex()) or mobile.sn()
         end
         if tmp[v]:lower() == "imei" then
+            tmpda1=1
             tmp[v] = hex and (mobile.imei():toHex()) or mobile.imei()
         end
         if tmp[v]:lower() == "muid" then
+            tmpda1=1
             tmp[v] = hex and (mobile.muid():toHex()) or mobile.muid()
         end
         if tmp[v]:lower() == "imsi" then
+            tmpda1=1
             tmp[v] = hex and (mobile.imsi():toHex()) or mobile.imsi()
         end
         if tmp[v]:lower() == "iccid" then
+            tmpda1=1
             tmp[v] = hex and (mobile.iccid():toHex()) or mobile.iccid()
         end
         if tmp[v]:lower() == "csq" then
+            tmpda1=1
             tmp[v] = hex and string.format("%02X", mobile.csq()) or tostring(mobile.csq())
         end
-        if tmpdata == tmp[v] and v > 1 then tmp[v] = "|" .. tmp[v] end
+        if tmpdata==tmp[v] and v>1  then
+            if tmpda1~=1 then
+                tmp[v] = "|"..tmp[v]
+            end
+         end
     end
     return hex and dtulib.fromHexnew((table.concat(tmp))) or table.concat(tmp)
 end

@@ -968,6 +968,13 @@ if uidgps ~= 1 and dtu.uconf and dtu.uconf[1] and tonumber(dtu.uconf[1][1]) == 1
     uart_INIT(1, dtu.uconf) end
 if uidgps ~= 2 and dtu.uconf and dtu.uconf[2] and tonumber(dtu.uconf[2][1]) == 2 then uart_INIT(2, dtu.uconf) end
 -- if uidgps ~= 3 and dtu.uconf and dtu.uconf[3] and tonumber(dtu.uconf[3][1]) == 3 then uart_INIT(3, dtu.uconf) end
+if true then
+    dtu.uconf[4] = {uart.VUART_0, 115200, 8, 2, 0}
+    uart_INIT(4, dtu.uconf)
+else
+    -- dtu.uconf[3] = {3, 921600, 8, uart.PAR_NONE, uart.STOP_1, 2}
+    -- uart_INIT(3, dtu.uconf)
+    end
 
 -- 启动GPS任务
 if uidgps then
@@ -991,20 +998,22 @@ if dtu.warn and dtu.warn.gpio and #dtu.warn.gpio > 0 then
     log.info("DTU#",#dtu.warn.gpio)
     -- log.info("gpio值是",tonumber(dtu.warn.gpio[i][1]:sub(4, -1)))
     for i = 1, #dtu.warn.gpio do
-        gpio.debounce(tonumber(dtu.warn.gpio[i][1]:sub(4, -1)),100)
+        gpio.debounce(tonumber(dtu.warn.gpio[i][1]:sub(4, -1)),5,1)
         local irq=dtu.warn.gpio[i][2]==1 and gpio.FALLING or gpio.RISING
-        log.info("IRQ",irq,type(dtu.warn.gpio[i][2]))
+        log.info("IRQ",irq)
         log.info("IRQ2",gpio.FALLING,gpio.RISING)
         gpio.setup(tonumber(dtu.warn.gpio[i][1]:sub(4, -1)), function(msg)
             log.info("MSG是",msg)
             log.info("MSG2是",gpio.RISING)
             log.info("MSG3是",gpio.FALLING)
-            if tonumber(dtu.warn.gpio[i][6]) == 1 then 
-                log.info("发布一个主题","NET_SENT_RDY_" .. dtu.warn.gpio[i][5], dtu.warn.gpio[i][4]) 
-                sys.publish("NET_SENT_RDY_" .. dtu.warn.gpio[i][5], dtu.warn.gpio[i][4]) 
-            end
-            if dtu.preset and tonumber(dtu.preset.number) then
-                if tonumber(dtu.warn.gpio[i][7]) == 1 then sms.send(dtu.preset.number,dtu.warn.gpio[i][4]) end
+            if (msg == gpio.RISING and tonumber(dtu.warn.gpio[i][2]) == 1) or (msg == gpio.FALLING and tonumber(dtu.warn.gpio[i][3]) == 1) then
+                if tonumber(dtu.warn.gpio[i][6]) == 1 then 
+                    log.info("发布一个主题","NET_SENT_RDY_" .. dtu.warn.gpio[i][5], dtu.warn.gpio[i][4]) 
+                    sys.publish("NET_SENT_RDY_" .. dtu.warn.gpio[i][5], dtu.warn.gpio[i][4]) 
+                end
+                if dtu.preset and tonumber(dtu.preset.number) then
+                    if tonumber(dtu.warn.gpio[i][7]) == 1 then sms.send(dtu.preset.number,dtu.warn.gpio[i][4]) end
+                end
             end
         end, gpio.PULLUP,irq)
     end
