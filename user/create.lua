@@ -718,6 +718,7 @@ local function aliyunOtok(cid, pios, reg, convert, passon, upprot, dwprot, keepA
         return
     end
     log.warn("一型一密动态注册返回三元组:", deviceName ~= nil, deviceSecret ~= nil)
+    log.warn("一型一密动态注册返回三元组2:", deviceName, deviceSecret)
     aliyunOmok(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive, timeout, RegionId, ProductKey, deviceSecret,
         deviceName, ver, cleansession, qos, uid, sub, pub,InstanceId)
 end
@@ -816,6 +817,28 @@ function dev_txiotnew(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive
     log.info("腾讯云新版连接方式开启")
 end
 
+local function oneNetNew(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive, timeout, oneNetAddr, port,ProductId,
+    ProductSecret, DeviceName, sub, pub, qos,uid)
+    local client_id, user_name, password = iotauth.onenet(ProductId, DeviceName, ProductSecret)
+    if type(sub) ~= "string" or sub == "" then
+        sub = "$sys/" .. ProductId .. "/" .. DeviceName .. "/custome/up_reply"
+    else
+        sub = listTopic(sub, "addImei", ProductId, DeviceName)
+        local topics = {}
+        for i = 1, #sub do
+            topics[sub[i]] = tonumber(sub[i + 1]) or qos
+        end
+        sub = topics
+    end
+    if type(pub) ~= "string" or pub == "" then
+        pub = "$sys/" .. ProductId .. "/" .. DeviceName .. "/custome/up"
+    else
+        pub = listTopic(pub, "addImei", ProductId, DeviceName)
+    end
+    mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive, timeout, oneNetAddr, port, user_name, password, 1,
+    sub, pub, qos, 0, uid, client_id, "addImei", ssl, will, "1", cert)
+    
+end
 ---------------------------------------------------------- 参数配置,任务转发，线程守护主进程----------------------------------------------------------
 function create.connect(pios, conf, reg, convert, passon, upprot, dwprot, webProtect, protectContent)
     local flyTag = false
@@ -918,6 +941,11 @@ function create.connect(pios, conf, reg, convert, passon, upprot, dwprot, webPro
             log.warn("----------------------- tencent iot is start! --------------------------------------")
             socket.sntp()
             sys.taskInit(dev_txiotnew, k, pios, reg, convert, passon, upprot, dwprot, unpack(v, 2))
+
+        elseif v[1] and v[1]:upper() == "ONENETNEW" then
+            log.warn("----------------------- oneNetNew iot is start! --------------------------------------")
+            socket.sntp()
+            sys.taskInit(oneNetNew, k, pios, reg, convert, passon, upprot, dwprot, unpack(v, 2))
         end
     end
     -- 守护进程

@@ -645,7 +645,7 @@ cmd.rrpc = {
     end,
     ["gettime"] = function(t)
         local t = os.date("*t")
-        return "rrpc,nettime," .. string.format("%04d-%02d-%02d %02d:%02d:%02d", t.year,t.month,t.day,t.hour,t.min,t.sec)
+        return "rrpc,gettime," .. string.format("%04d-%02d-%02d %02d:%02d:%02d", t.year,t.month,t.day,t.hour,t.min,t.sec)
     end,
     ["setpio"] = function(t) 
         if pios["pio" .. t[1]] and (tonumber(t[2]) > -1 and tonumber(t[2]) < 2) then 
