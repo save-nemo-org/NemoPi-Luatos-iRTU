@@ -364,7 +364,7 @@ local function listTopic(str, addImei, ProductKey, deviceName)
                 if tmp[v]:lower() == "productid" or tmp[v]:lower() == "{pid}" then
                     tmp[v] = ProductKey
                 end
-                if tmp[v]:lower() == "SN" then
+                if tmp[v]:lower() == "sn" then
                     tmp[v] = hex and (mobile.sn():toHex()) or mobile.sn()
                 end
                 if tmp[v]:lower() == "messageid" or tmp[v]:lower() == "${messageid}" then

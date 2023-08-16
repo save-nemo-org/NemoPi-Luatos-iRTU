@@ -375,6 +375,7 @@ end)
 -- 订阅服务器远程唤醒指令
 sys.subscribe("REMOTE_WAKEUP", function()
     sys.publish("GPS_GO")
+    open(2,115200,30)
     sens.wup = true 
 end)
 --订阅服务器远程关闭指令
@@ -397,7 +398,6 @@ pios = {
     pio9 =gpio.setup(9, nil,gpio.PULLDOWN),
     pio16 =gpio.setup(16, nil,gpio.PULLDOWN),
     pio17 =gpio.setup(17, nil,gpio.PULLDOWN),
-    pio19 =gpio.setup(19, nil,gpio.PULLDOWN),
     pio20 =gpio.setup(20, nil,gpio.PULLDOWN),
     pio21 =gpio.setup(21, nil,gpio.PULLDOWN),
     pio22 =gpio.setup(22, nil,gpio.PULLDOWN),
@@ -505,10 +505,9 @@ end, 1000)
 
 -- 串口写数据处理
 function write(uid, str,cid)
-    log.info("进到write了")
     uid = tonumber(uid)
     if not str or str == "" or not uid then return end
-    if uid == uart.USB then return uart.write(uart.USB, str) end
+    if uid == uart.VUART_0 then return uart.write(uart.VUART_0, str) end
     if str ~= true then
         for i = 1, #str, SENDSIZE do
             table.insert(writeBuff[uid], str:sub(i, i + SENDSIZE - 1))
@@ -526,14 +525,18 @@ function write(uid, str,cid)
 end
 
 local function writeDone(uid)
-    if #writeBuff[uid] == 0 then
-        writeIdle[uid] = true
-        sys.publish("UART_" .. uid .. "_WRITE_DONE")
-        log.warn("UART_" .. uid .. "write done!")
+    if uid=="32" or uid==32 then
+        
     else
-        writeIdle[uid] = false
-        uart.write(uid, table.remove(writeBuff[uid], 1))
-        log.warn("UART_" .. uid .. "writing ...")
+        if #writeBuff[uid] == 0 then
+            writeIdle[uid] = true
+            sys.publish("UART_" .. uid .. "_WRITE_DONE")
+            log.warn("UART_" .. uid .. "write done!")
+        else
+            writeIdle[uid] = false
+            uart.write(uid, table.remove(writeBuff[uid], 1))
+            log.warn("UART_" .. uid .. "writing ...")
+        end
     end
 end
 
@@ -851,7 +854,7 @@ function uart_INIT(i, uconf)
     log.info("rs485us",rs485us)
     uart.setup(uconf[i][1], uconf[i][2], uconf[i][3], stb,parity,uart.LSB,SENDSIZE, default["dir" .. i],0,rs485us)
     uart.on(uconf[i][1], "sent", writeDone)
-    if uconf[i][1] == uart.USB or tonumber(dtu.uartReadTime) > 0 then
+    if uconf[i][1] == uart.VUART_0 or tonumber(dtu.uartReadTime) > 0 then
         uart.on(uconf[i][1], "receive", function(uid, length)
             log.info("接收到的数据是",uid,length)
             table.insert(recvBuff[i], uart.read(uconf[i][1], length or 8192))
