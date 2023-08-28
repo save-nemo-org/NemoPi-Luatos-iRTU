@@ -819,6 +819,7 @@ end
 
 local function oneNetNew(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive, timeout, oneNetAddr, port,ProductId,
     ProductSecret, DeviceName, sub, pub, qos,uid)
+    DeviceName=DeviceName=="" and mobile.imei() or DeviceName
     local client_id, user_name, password = iotauth.onenet(ProductId, DeviceName, ProductSecret)
     if type(sub) ~= "string" or sub == "" then
         sub = "$sys/" .. ProductId .. "/" .. DeviceName .. "/custome/up_reply"
