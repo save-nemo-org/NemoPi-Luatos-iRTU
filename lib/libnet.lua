@@ -169,7 +169,7 @@ sys.subscribe("SIM_IND", function(status)
     -- GET_NUMBER 获取到电话号码(不一定有值)
     log.info("sim status", status)
     if status == "GET_NUMBER" then log.info(tag,"GET_NUMBER iccid ", mobile.iccid())
-    elseif status == "RDY" then log.info(tag,"RDY iccid ", mobile.iccid())
+    elseif status == "RDY" then log.info(tag,"识别到了SIM卡状态：RDY iccid： ", mobile.iccid())
     elseif status == "NORDY" then log.info(tag,"识别不到您的SIM卡,请重新插入并且重启模块")
     elseif status == "SIM_PIN" then log.info(tag,"SIM卡锁pin,请解锁后使用")
 	else log.info(tag,"sim status", status) end

@@ -119,18 +119,15 @@ function dtulib.request(method, url, timeout, params, data, ctype, basic, head, 
     _, idx, auth = url:find("(.-:.-)@", (offset or 0) + 1)
     offset = idx or offset
     -- 处理HTTP协议body部分的数据
-    log.info("真的是1吗",ctype)
     ctype = ctype or 2
     headers['Content-Type'] = Content_type[ctype]
-    log.info("这里是什么呢",headers['Content-Type'])
     if ctype == 1 and type(data) == 'table' then
         data = urlencodeTab(data)    
-        log.info("进到1里面了")
     elseif ctype == 2 and data ~= nil then
         data = type(data) == 'string' and data or (type(data) == 'table' and json.encode(data)) or ""
     elseif ctype == 3 and type(data) == 'string' then
     elseif data and type(data) == "string" then
-        log.info("进到elseif里面了")
+ 
     end
     -- 处理HTTP Basic Authorization 验证
     if auth then

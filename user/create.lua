@@ -168,8 +168,10 @@ local function tcpTask(dName, cid, pios, reg, convert, passon, upprot, dwprot, p
     local netc = socket.create(nil, dName)
     local subMessage = function(data)
         if data then
-            table.insert(outputSocket, data)
-            sys_send(dName, socket.EVENT, 0)
+            if data~="mqttrecv" then
+                table.insert(outputSocket, data)
+                sys_send(dName, socket.EVENT, 0)
+            end
         end
     end
     sys.subscribe("NET_SENT_RDY_" .. (passon and cid or uid), subMessage)
@@ -179,6 +181,7 @@ local function tcpTask(dName, cid, pios, reg, convert, passon, upprot, dwprot, p
     -- local isUdp = false
     -- local isSsl = false
     log.info("DNAME", dName, isUdp, isSsl, addr, prot, ping, port)
+    log.info("BSP",rtos.bsp())
     socket.debug(netc, true)
     socket.config(netc, nil, isUdp, isSsl)
     while true do
@@ -431,7 +434,7 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
             sys.publish("mqtt_conack")
         elseif event == "recv" then -- 服务器下发的数据
             log.info("mqtt", "downlink", "topic", data, "payload", payload)
-            sys.publish("NET_SENT_RDY_" .. (passon and cid or uid), "recv", data, payload)
+            sys.publish("NET_SENT_RDY_" .. (passon and cid or uid), "mqttrecv", data, payload)
             -- 这里继续加自定义的业务处理逻辑
         elseif event == "sent" then -- publish成功后的事件
             log.info("mqtt", "sent", "pkgid", data)
@@ -476,7 +479,7 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
                     local ret, topic, data, payload = sys.waitUntil("NET_SENT_RDY_" .. (passon and cid or uid),
                         (timeout or 180) * 1000)
                     log.info("RET", ret, topic, data, payload)
-                    if ret and topic ~= "recv" then
+                    if ret and topic ~= "mqttrecv" then
                         if convert == 1 then -- 转换为Hex String 报文
                             datahex = topic:toHex()
                             if not mqttc:publish(pub[1], datahex, tonumber(pub[2]) or qos, retain) then
@@ -518,14 +521,14 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
                             sys.publish("UART_SENT_RDY_" .. uid, uid, "SEND_OK\r\n")
                         end
                         log.info('The client actively reports status information.')
-                    elseif ret and topic == "recv" then
+                    elseif ret and topic == "mqttrecv" then
                         log.info("接收到了一条消息")
                         messageId = data:match(".+/rrpc/request/(%d+)")
                         log.info("MESSAGE", messageId)
                         log.info("RET2", ret, topic, data, payload)
                         -- 这里执行用户自定义的指令
                         if payload:sub(1, 5) == "rrpc," or payload:sub(1, 7) == "config," then
-                            log.info("进到这里了1")
+                            -- log.info("进到这里了1")
                             local res, msg = pcall(create.userapi, payload, pios)
                             if not res then
                                 log.error("远程查询的API错误:", msg)
@@ -544,10 +547,10 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
                                 break
                             end
                         elseif convert == 1 then -- 转换为HEX String
-                            log.info("进到这里了2")
+                            -- log.info("进到这里了2")
                             sys.publish("UART_SENT_RDY_" .. uid, uid, (dtulib.fromHexnew(payload)))
                         elseif convert == 0 and dwprotFnc then -- 转换用户自定义报文
-                            log.info("进到这里了3")
+                            -- log.info("进到这里了3")
                             local res, msg = pcall(dwprotFnc, payload, data)
                             if not res or not msg then
                                 log.error("数据流模版错误:", msg)

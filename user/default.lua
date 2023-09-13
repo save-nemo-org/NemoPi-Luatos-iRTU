@@ -8,12 +8,16 @@ dtulib=require "dtulib"
 local lbsLoc = require("lbsLoc")
 
 
+-- 判断模块类型
+local ver = rtos.bsp():upper()
+local is618=ver:find("618")
+local is8850=ver:find("8850")
 -- 串口缓冲区最大值
 local SENDSIZE =4096
 -- 串口写空闲
 local writeIdle = {true, true, true}
 -- 串口读缓冲区
-local recvBuff, writeBuff = {{}, {}, {}, {}}, {{}, {}, {}, {}}
+local recvBuff, writeBuff = {{}, {}, {}, {},{},{}}, {{}, {}, {}, {},{},{}}
 -- 串口流量统计
 local flowCount, timecnt = {0, 0, 0, 0}, 1
 -- 定时采集任务的初始时间
@@ -82,6 +86,7 @@ sys.timerLoopStart(function ()
     -- log.info("RTOS>MEMINFO",rtos.meminfo("sys"))
     -- log.info("RTOS>MEMINFO2",rtos.meminfo("lua"))
     -- log.info("fs.fsstat(path)",fs.fsstat("/"))
+    -- log.info("IS8850",is8850,is618,ver)
     collectgarbage()
 end,1000)
 
@@ -711,19 +716,19 @@ local function read(uid, idx)
     end
     -- 执行单次HTTP指令
     if s:sub(1, 5) == "http," then
-        local str = ""
-        local idx1, idx2, jsonstr = s:find(",[\'\"](.+)[\'\"],")
-        if jsonstr then
-            str = s:sub(1, idx1) .. s:sub(idx2, -1)
-        else
-            -- 判是不是json，如果不是json，则是普通的字符串
-            idx1, idx2, jsonstr = s:find(",([%[{].+[%]}]),")
-            if jsonstr then
-                str = s:sub(1, idx1) .. s:sub(idx2, -1)
-            else
-                str = s
-            end
-        end
+        local str = s
+        -- local idx1, idx2, jsonstr = s:find(",[\'\"](.+)[\'\"],")
+        -- if jsonstr then
+        --     str = s:sub(1, idx1) .. s:sub(idx2, -1)
+        -- else
+        --     -- 判是不是json，如果不是json，则是普通的字符串
+        --     idx1, idx2, jsonstr = s:find(",([%[{].+[%]}]),")
+        --     if jsonstr then
+        --         str = s:sub(1, idx1) .. s:sub(idx2, -1)
+        --     else
+        --         str = s
+        --     end
+        -- end
         --local t = str:match("(.+)\r\n") and str:match("(.+)\r\n"):split(',') or str:split(',')
         local t = str:match("(.+)\r\n") and dtulib.split(str:match("(.+)\r\n"),',') or dtulib.split(str,',')
         if not mobile.status() == 1 then write(uid, "NET_NORDY\r\n") return end
@@ -732,7 +737,17 @@ local function read(uid, idx)
             if (jsonstr or t[5]) and type(dtulib.unSerialize(jsonstr or t[5])) =="table" then
                 httpbody=dtulib.unSerialize(jsonstr or t[5])
             end
-            local code, head, body = dtulib.request(t[2]:upper(), t[3],t[8],nil, httpbody, tonumber(t[6]) or 1, t[7])
+            local head1={}
+            if t[8] then
+                local httphead=dtulib.split(t[8],'+')
+                -- local head1={}
+                for key, value in pairs(httphead) do
+                    for k, v in string.gmatch(value, "(.-):(.*)") do 
+                        head1[k]=v
+                    end
+                end
+            end
+            local code, head, body = dtulib.request(t[2]:upper(), t[3],(t[4] or 10) * 1000,nil, httpbody, tonumber(t[6]) or 1, t[7],head1)
             log.info("uart http response:", body)
             write(uid, body)
         end, t, uid)
@@ -970,7 +985,7 @@ local uidgps = dtu.gps and dtu.gps.fun and tonumber(dtu.gps.fun[1])
 if uidgps ~= 1 and dtu.uconf and dtu.uconf[1] and tonumber(dtu.uconf[1][1]) == 1 then
     uart_INIT(1, dtu.uconf) end
 if uidgps ~= 2 and dtu.uconf and dtu.uconf[2] and tonumber(dtu.uconf[2][1]) == 2 then uart_INIT(2, dtu.uconf) end
--- if uidgps ~= 3 and dtu.uconf and dtu.uconf[3] and tonumber(dtu.uconf[3][1]) == 3 then uart_INIT(3, dtu.uconf) end
+if uidgps ~= 3 and dtu.uconf and dtu.uconf[3] and tonumber(dtu.uconf[3][1]) == 3 then uart_INIT(3, dtu.uconf) end
 if true then
     dtu.uconf[4] = {uart.VUART_0, 115200, 8, 2, 0}
     uart_INIT(4, dtu.uconf)
@@ -1003,6 +1018,14 @@ if dtu.warn and dtu.warn.gpio and #dtu.warn.gpio > 0 then
     for i = 1, #dtu.warn.gpio do
         gpio.debounce(tonumber(dtu.warn.gpio[i][1]:sub(4, -1)),5,1)
         local irq=dtu.warn.gpio[i][2]==1 and gpio.FALLING or gpio.RISING
+        -- log.info("IS8850",is8850)
+        -- if is8850 then
+        --     log.info("是8850平台")
+        --     if dtu.warn.gpio[i][2]==1 and dtu.warn.gpio[i][3]==1 then
+        --         irq=gpio.BOTH
+        --         log.info("同时触发")
+        --     end
+        -- end
         log.info("IRQ",irq)
         log.info("IRQ2",gpio.FALLING,gpio.RISING)
         gpio.setup(tonumber(dtu.warn.gpio[i][1]:sub(4, -1)), function(msg)
