@@ -441,7 +441,7 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
         elseif event == "disconnect" then
             -- 非自动重连时,按需重启mqttc
             -- mqtt_client:connect()
-            sys.publish("NET_SENT_RDY_" .. (passon and cid or uid))
+            sys.publish("NET_SENT_RDY_" .. (passon and cid or uid),"disconnect")
         end
     end)
     if not will or will == "" then
@@ -578,6 +578,9 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
                         end
                     elseif ret == false then
                         log.warn("等待超时了")
+                    elseif ret == true and topic=="disconnect" then
+                        log.warn("断开连接了")
+                        break
                     else
                         log.warn('The MQTTServer connection is broken.')
                         break
@@ -597,6 +600,7 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
         end
         datalink[cid] = false
         mqttc:disconnect()
+        log.info("断开连接了2")
         sys.wait((2 * idx) * 1000)
         idx = (idx > 9) and 1 or (idx + 1)
     end
