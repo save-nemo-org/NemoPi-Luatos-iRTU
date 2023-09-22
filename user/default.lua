@@ -232,23 +232,14 @@ function deviceMessage(format)
         sens.acc and 1 or 0, sens.act and 1 or 0, sens.chg and 1 or 0, sens.und and 1 or 0, sens.vcc, mobile.csq())
     end
 end
-local function centToDeg(str)
-    log.info("STRRR",str)
-    if str~=0 and str~="0" and str then
-        local integer, decimal = str:match("(%d+).(%d+)")
-    log.info("INT", math.tointeger(integer), math.tointeger (decimal),#decimal)
-    integer=math.tointeger(integer)
-    
-        local tmp = (integer % 100) * (10 ^ #decimal) + decimal
-        tmp=math.tointeger (tmp)
-        log.info("JIN",tmp,math.tointeger(((integer - integer % 100)) * 10 ^ #decimal + tmp))
-        return math.tointeger(((integer - integer % 100)) * 10 ^ #decimal + tmp)
-    else
-        return 0
+
+sys.taskInit(function ()
+    while true do
+        sys.wait(60000)
+        mobile.reqCellInfo(60)
+        sys.waitUntil("CELL_INFO_UPDATE", 30000)
     end
-
-end
-
+end)
 
 
 -- 上传定位信息
