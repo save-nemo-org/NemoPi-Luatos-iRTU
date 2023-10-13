@@ -724,8 +724,8 @@ local function read(uid, idx)
         local t = str:match("(.+)\r\n") and dtulib.split(str:match("(.+)\r\n"),',') or dtulib.split(str,',')
         if not mobile.status() == 1 then write(uid, "NET_NORDY\r\n") return end
         sys.taskInit(function(t, uid)
-            local httpbody=jsonstr or t[5]
-            if (jsonstr or t[5]) and type(dtulib.unSerialize(jsonstr or t[5])) =="table" then
+            local httpbody= t[5]
+            if ( t[5]) and type(dtulib.unSerialize( t[5])) =="table" then
                 httpbody=dtulib.unSerialize(jsonstr or t[5])
             end
             local head1={}

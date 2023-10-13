@@ -104,6 +104,7 @@ function dtulib.request(method, url, timeout, params, data, ctype, basic, head, 
         ['User-Agent'] = 'Mozilla/4.0',
         ['Accept'] = '*/*',
         ['Accept-Language'] = 'zh-CN,zh,cn',
+        ['Content-Type'] = 'application/x-www-form-urlencoded',
         ['Connection'] = 'close',
     }
     if type(head) == "string" then
@@ -115,6 +116,7 @@ function dtulib.request(method, url, timeout, params, data, ctype, basic, head, 
     elseif type(head) == "table" then
         dtulib.merge(headers, head)
     end
+    
 
     _, idx, auth = url:find("(.-:.-)@", (offset or 0) + 1)
     offset = idx or offset
@@ -126,8 +128,9 @@ function dtulib.request(method, url, timeout, params, data, ctype, basic, head, 
     elseif ctype == 2 and data ~= nil then
         data = type(data) == 'string' and data or (type(data) == 'table' and json.encode(data)) or ""
     elseif ctype == 3 and type(data) == 'string' then
+        headers['Content-Length'] = io.fileSize(data) or 0
     elseif data and type(data) == "string" then
- 
+        headers['Content-Length'] = #data or 0
     end
     -- 处理HTTP Basic Authorization 验证
     if auth then
@@ -139,6 +142,7 @@ function dtulib.request(method, url, timeout, params, data, ctype, basic, head, 
     local str = ""
     for k, v in pairs(headers) do str = str .. k .. ": " .. v .. "\r\n" end
 
+    log.info("AAAA",method,url,headers,data)
     return http.request(method,url,headers,data,{timeout=timeout}).wait()
 end
 --- 将HEX字符串转成Lua字符串，如"313233616263"转为"123abc", 函数里加入了过滤分隔符，可以过滤掉大部分分隔符（可参见正则表达式中\s和\p的范围）。
