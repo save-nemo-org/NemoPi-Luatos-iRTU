@@ -884,6 +884,11 @@ function create.connect(pios, conf, reg, convert, passon, upprot, dwprot, webPro
                     datalink[cid] = mobile.status() == 1
                     local result, msg = sys.waitUntil("NET_SENT_RDY_" .. (passon and cid or uid))
                     if result and msg then
+                        if headers then
+                            if headers and type(dtulib.unSerialize(headers))=="table" then
+                                headers=dtulib.unSerialize(headers)
+                            end
+                        end
                         if convert == 1 then                   -- 转换为Hex String 报文
                             msg = msg:toHex()
                         elseif convert == 0 and upprotFnc then -- 转换为用户自定义报文
@@ -896,6 +901,7 @@ function create.connect(pios, conf, reg, convert, passon, upprot, dwprot, webPro
                         if passon then
                             sys.publish("UART_SENT_RDY_" .. uid, uid, "SEND_OK\r\n")
                         end
+                        
                         local code, head, body = dtulib.request(method:upper(), url, timeout * 1000,
                             way == 0 and msg or nil, way == 1 and msg or nil, dtype, basic, headers)
                         local headstr = ""

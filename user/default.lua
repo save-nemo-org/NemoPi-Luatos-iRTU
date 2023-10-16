@@ -725,8 +725,8 @@ local function read(uid, idx)
         if not mobile.status() == 1 then write(uid, "NET_NORDY\r\n") return end
         sys.taskInit(function(t, uid)
             local httpbody= t[5]
-            if ( t[5]) and type(dtulib.unSerialize( t[5])) =="table" then
-                httpbody=dtulib.unSerialize(jsonstr or t[5])
+            if (t[5]) and type(dtulib.unSerialize(t[5])) =="table" then
+                httpbody=dtulib.unSerialize(t[5])
             end
             local head1={}
             if t[8] then

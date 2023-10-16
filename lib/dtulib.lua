@@ -116,7 +116,7 @@ function dtulib.request(method, url, timeout, params, data, ctype, basic, head, 
     elseif type(head) == "table" then
         dtulib.merge(headers, head)
     end
-    
+ 
 
     _, idx, auth = url:find("(.-:.-)@", (offset or 0) + 1)
     offset = idx or offset
