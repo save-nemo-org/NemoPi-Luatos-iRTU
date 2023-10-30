@@ -407,7 +407,7 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
     if type(sub) == "string" then
         sub = listTopic(sub, addImei)
         local topics = {}
-        for i = 1, #sub do
+        for i = 1, #sub,2 do
             topics[sub[i]] = tonumber(sub[i + 1]) or qos
             log.info("TOPICS", topics[sub[i]])
         end

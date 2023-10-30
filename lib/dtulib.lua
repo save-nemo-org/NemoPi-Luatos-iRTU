@@ -182,7 +182,7 @@ end
 -- @return param: 反序列化为 number or table or string or boolean
 -- @usage local v = string.unSerialize("true") --> v为布尔值True
 function dtulib.unSerialize(str)
-    return loadstring("return " .. str)()
+    return loadstring("return " .. str) and loadstring("return " .. str)() or str
 end
 
 return dtulib
