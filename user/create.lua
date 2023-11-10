@@ -624,7 +624,7 @@ local function oneNet_mqtt(cid, pios, reg, convert, passon, upprot, dwprot, keep
     else
         sub = listTopic(sub, "addImei", productId, deviceName)
         local topics = {}
-        for i = 1, #sub do
+        for i = 1, #sub,2 do
             topics[sub[i]] = tonumber(sub[i + 1]) or qos
         end
         sub = topics
@@ -698,7 +698,7 @@ local function aliyunOmok(cid, pios, reg, convert, passon, upprot, dwprot, keepA
     else
         sub = listTopic(sub, "addImei", ProductKey, deviceName)
         local topics = {}
-        for i = 1, #sub do
+        for i = 1, #sub,2 do
             topics[sub[i]] = tonumber(sub[i + 1]) or qos
         end
         sub = topics
@@ -808,7 +808,7 @@ function dev_txiotnew(cid, pios, reg, convert, passon, upprot, dwprot, keepAlive
     else
         sub = listTopic(sub, "addImei", ProductId, mobile.imei())
         local topics = {}
-        for i = 1, #sub do
+        for i = 1, #sub,2 do
             topics[sub[i]] = tonumber(sub[i + 1]) or qos
         end
         sub = topics
@@ -833,7 +833,7 @@ local function oneNetNew(cid, pios, reg, convert, passon, upprot, dwprot, keepAl
     else
         sub = listTopic(sub, "addImei", ProductId, DeviceName)
         local topics = {}
-        for i = 1, #sub do
+        for i = 1, #sub,2 do
             topics[sub[i]] = tonumber(sub[i + 1]) or qos
         end
         sub = topics
