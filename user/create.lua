@@ -479,7 +479,7 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
                     local ret, topic, data, payload = sys.waitUntil("NET_SENT_RDY_" .. (passon and cid or uid),
                         (timeout or 180) * 1000)
                     log.info("RET", ret, topic, data, payload)
-                    if ret and topic ~= "mqttrecv" then
+                    if ret and topic ~= "mqttrecv" and topic~="disconnect" then
                         if convert == 1 then -- 转换为Hex String 报文
                             datahex = topic:toHex()
                             if not mqttc:publish(pub[1], datahex, tonumber(pub[2]) or qos, retain) then
