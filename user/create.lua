@@ -233,8 +233,8 @@ local function tcpTask(dName, cid, pios, reg, convert, passon, upprot, dwprot, p
                         if not res then
                             log.error("远程查询的API错误:", msg)
                         end
-                        if convert == 0 and upprotFnc then -- 转换为用户自定义报文
-                            res, msg = pcall(upprotFnc, data)
+                        if convert == 0 and dwprotFnc then -- 转换为用户自定义报文
+                            res, msg = pcall(dwprotFnc, data)
                             if not res then
                                 log.error("数据流模版错误:", msg)
                             end
@@ -533,8 +533,8 @@ local function mqttTask(cid, pios, reg, convert, passon, upprot, dwprot, keepAli
                             if not res then
                                 log.error("远程查询的API错误:", msg)
                             end
-                            if convert == 0 and upprotFnc then -- 转换为用户自定义报文
-                                res, msg = pcall(upprotFnc, payload)
+                            if convert == 0 and dwprotFnc then -- 转换为用户自定义报文
+                                res, msg = pcall(dwprotFnc, payload)
                                 if not res then
                                     log.error("数据流模版错误:", msg)
                                 end
