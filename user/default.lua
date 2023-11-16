@@ -431,7 +431,8 @@ end
 if not dtu.pins or not dtu.pins[3] or not pios[dtu.pins[3]] then 
 
 else
-    gpio.setup(tonumber(dtu.pins[3]:sub(4, -1)), resetConfig, gpio.PULLUP)
+    gpio.debounce(tonumber(dtu.pins[3]:sub(4, -1)),5,1)
+    gpio.setup(tonumber(dtu.pins[3]:sub(4, -1)), resetConfig, gpio.PULLUP,gpio.FALLING)
     pios[dtu.pins[3]] = nil
 end
 
