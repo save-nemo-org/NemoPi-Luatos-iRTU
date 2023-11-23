@@ -31,6 +31,8 @@ ver = rtos.bsp()
 
 default = require "default"
 
+mcu.hardfault(1)--死机重启
+
 collectgarbage()
 collectgarbage()
 -- log.info("mem.lua", rtos.meminfo())

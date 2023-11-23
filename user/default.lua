@@ -431,7 +431,7 @@ end
 if not dtu.pins or not dtu.pins[3] or not pios[dtu.pins[3]] then 
 
 else
-    gpio.debounce(tonumber(dtu.pins[3]:sub(4, -1)),5,1)
+    gpio.debounce(tonumber(dtu.pins[3]:sub(4, -1)),100,1)
     gpio.setup(tonumber(dtu.pins[3]:sub(4, -1)), resetConfig, gpio.PULLUP,gpio.FALLING)
     pios[dtu.pins[3]] = nil
 end
@@ -984,7 +984,7 @@ if true then
 else
     -- dtu.uconf[3] = {3, 921600, 8, uart.PAR_NONE, uart.STOP_1, 2}
     -- uart_INIT(3, dtu.uconf)
-    end
+end
 
 -- 启动GPS任务
 if uidgps then
@@ -1008,7 +1008,7 @@ if dtu.warn and dtu.warn.gpio and #dtu.warn.gpio > 0 then
     log.info("DTU#",#dtu.warn.gpio)
     -- log.info("gpio值是",tonumber(dtu.warn.gpio[i][1]:sub(4, -1)))
     for i = 1, #dtu.warn.gpio do
-        gpio.debounce(tonumber(dtu.warn.gpio[i][1]:sub(4, -1)),5,1)
+        gpio.debounce(tonumber(dtu.warn.gpio[i][1]:sub(4, -1)),100,1)
         local irq=dtu.warn.gpio[i][2]==1 and gpio.FALLING or gpio.RISING
         -- log.info("IS8850",is8850)
         -- if is8850 then
@@ -1023,7 +1023,7 @@ if dtu.warn and dtu.warn.gpio and #dtu.warn.gpio > 0 then
         gpio.setup(tonumber(dtu.warn.gpio[i][1]:sub(4, -1)), function(msg)
             log.info("MSG是",msg)
             log.info("MSG2是",gpio.RISING)
-            log.info("MSG3是",gpio.FALLING)
+            log.info("MSG3是",gpio.FALLING) 
             if (msg == gpio.RISING and tonumber(dtu.warn.gpio[i][2]) == 1) or (msg == gpio.FALLING and tonumber(dtu.warn.gpio[i][3]) == 1) then
                 if tonumber(dtu.warn.gpio[i][6]) == 1 then 
                     log.info("发布一个主题","NET_SENT_RDY_" .. dtu.warn.gpio[i][5], dtu.warn.gpio[i][4]) 
