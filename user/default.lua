@@ -448,8 +448,19 @@ local function netled(led)
     local ledpin = gpio.setup(led, 1)
     while true do
         -- GSM注册中
-        while mobile.status()==0 do blinkPwm(ledpin, 100, 100) end
-        while mobile.status()==1 do
+         while mobile.status() == 3 do 
+            blinkPwm(ledpin, 100, 100)
+            netready(0)
+        end
+        while mobile.status() == 2 do 
+            blinkPwm(ledpin, 100, 100)
+            netready(0)
+        end
+        while mobile.status() == 0 do 
+            blinkPwm(ledpin, 100, 100)
+            netready(0)
+        end
+        while mobile.status() == 1 do
             if create.getDatalink() then
                 netready(1)
                 blinkPwm(ledpin, 200, 1800)
@@ -977,7 +988,7 @@ local uidgps = dtu.gps and dtu.gps.fun and tonumber(dtu.gps.fun[1])
 if uidgps ~= 1 and dtu.uconf and dtu.uconf[1] and tonumber(dtu.uconf[1][1]) == 1 then
     uart_INIT(1, dtu.uconf) end
 if uidgps ~= 2 and dtu.uconf and dtu.uconf[2] and tonumber(dtu.uconf[2][1]) == 2 then uart_INIT(2, dtu.uconf) end
-if uidgps ~= 3 and dtu.uconf and dtu.uconf[3] and tonumber(dtu.uconf[3][1]) == 3 then uart_INIT(3, dtu.uconf) end
+if uidgps ~= 3 and dtu.uconf and dtu.uconf[3] and tonumber(dtu.uconf[3][1]) == 3 then  end
 if true then
     dtu.uconf[4] = {uart.VUART_0, 115200, 8, 2, 0}
     uart_INIT(4, dtu.uconf)
@@ -1101,10 +1112,10 @@ if dtu.task and #dtu.task ~= 0 then
 end
 
 -- sys.timerLoopStart(function()
---     -- log.info("mem.lua", rtos.meminfo())
---     -- log.info("mem.sys", rtos.meminfo("sys"))
+--     log.info("mem.lua", rtos.meminfo())
+--     log.info("mem.sys", rtos.meminfo("sys"))
 --     -- -- log.info("VERSION",_G.VERSION)
---     sys.publish("UART_SENT_RDY_1" , 1, "SENDOK")
+--     -- sys.publish("UART_SENT_RDY_1" , 1, "SENDOK")
 --  end, 3000)
 
 return default
