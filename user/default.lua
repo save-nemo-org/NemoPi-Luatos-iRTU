@@ -402,7 +402,7 @@ pios = {
     pio26 =gpio.setup(26, nil,gpio.PULLDOWN),  --READY指示灯
     pio27 =gpio.setup(27, nil,gpio.PULLDOWN),  --NET指示灯
     pio28 =gpio.setup(28, nil,gpio.PULLDOWN),  
-    pio29 =gpio.setup(29, nil,gpio.PULLDOWN),
+    pio29 =gpio.setup(29, nil,gpio.PULLDOWN) ,
     pio30 =gpio.setup(30, nil,gpio.PULLDOWN),
     pio31 =gpio.setup(31, nil,gpio.PULLDOWN),
     pio32 =gpio.setup(32, nil,gpio.PULLDOWN),
@@ -660,7 +660,8 @@ cmd.rrpc = {
     end,
     ["setpio"] = function(t) 
         if pios["pio" .. t[1]] and (tonumber(t[2]) > -1 and tonumber(t[2]) < 2) then 
-            pios["pio" .. t[1]](tonumber(t[2]) or 0)
+            -- pios["pio" .. t[1]](tonumber(t[2]) or 0)
+            gpio.setup(tonumber(t[1]),tonumber(t[2]))
             return "OK" 
         end 
         return "ERROR" end,
