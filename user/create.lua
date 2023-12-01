@@ -378,7 +378,7 @@ local function listTopic(str, addImei, ProductKey, deviceName)
                     tmp[v] = ProductKey
                 end
                 if tmp[v]:lower() == "devicename" or tmp[v]:lower() == "${devicename}" or tmp[v]:lower() ==
-                    "${yourdevicename}" or tmp[v]:lower() == "{device-name}" then
+                    "${yourdevicename}" or tmp[v]:lower() == "{device-name}" or tmp[v]:lower() == "${deviceName}" then
                     tmp[v] = deviceName
                 end
             end
