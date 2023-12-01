@@ -44,6 +44,7 @@ local dtu = {
     isRndis = "0", --是否打开Rndis
     isRndis2="1",
     webProtect = "0", --是否守护全部网络通道
+    isipv6="0", --ipv6是否打开
     pwrmod = "normal",
     password = "",
     protectContent={}, --守护的线路
@@ -122,6 +123,10 @@ if type(sheet) == "table" and sheet.uconf then
     if tonumber(dtu.nolog) ~= 1 then
         log.info("没有日志了哦")
         log.setLevel("SILENT") 
+    end
+    if tonumber(dtu.isipv6)==1 then
+        log.info("IPV6打开了")
+        mobile.ipv6(true)
     end
 end
 
