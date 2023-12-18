@@ -1,6 +1,6 @@
 -- LuaTools需要PROJECT和VERSION这两个信息
 PROJECT = "iRTU"
-VERSION = "1.0.4"
+VERSION = "1.0.5"
 
 PRODUCT_KEY = "0LkZx9Kn3tOhtW7uod48xhilVNrVsScV" --618DTU正式版本的key固定为它
 -- PRODUCT_KEY = "z1OoDfAP2LDtOStiMQTVDfXO6RkrWeBG" --618DTU测试版本的key固定为它
@@ -30,6 +30,8 @@ end
 ver = rtos.bsp()
 
 default = require "default"
+
+mcu.hardfault(1)--死机重启
 
 collectgarbage()
 collectgarbage()

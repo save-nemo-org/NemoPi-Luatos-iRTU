@@ -25,7 +25,7 @@ local lbsLoc = require("lbsLoc")
         -- locType：numble类型或者nil，定位类型，0表示基站定位成功，255表示WIFI定位成功
 function getLocCb(result, lat, lng, addr, time, locType)
     log.info("testLbsLoc.getLocCb", result, lat, lng)
-    -- 获取经纬度成功
+    -- 获取经纬度成功, 坐标系WGS84
     if result == 0 then
         log.info("服务器返回的时间", time:toHex())
         log.info("定位类型,基站定位成功返回0", locType)
@@ -37,7 +37,7 @@ lbsLoc.request(getLocCb)
 local sys = require "sys"
 local sysplus = require("sysplus")
 local libnet = require("libnet")
-local dtulib= require"dtulib"
+
 local lbsLoc = {}
 local d1Name = "lbsLoc"
 
@@ -95,7 +95,7 @@ end
 
 
 local function netCB(msg)
-	log.info("未处理消息", msg[1], msg[2], msg[3], msg[4])
+	--log.info("未处理消息", msg[1], msg[2], msg[3], msg[4])
 end
 
 
@@ -116,7 +116,7 @@ local function enCellInfo(s)
             if not handle then
                 table.insert(t,{mcc=mcc,mnc=mnc,lac=lac,rssici={{rssi=rssi,ci=ci}}})
             end
-            log.info("rssi、mcc、mnc、lac、ci", rssi,mcc,mnc,lac,ci)
+            log.debug("rssi,mcc,mnc,lac,ci", rssi,mcc,mnc,lac,ci)
         end
         for k,v in pairs(t) do
             ret = ret .. pack.pack(">HHb",v.lac,v.mcc,v.mnc)
@@ -129,11 +129,11 @@ local function enCellInfo(s)
 end
 
 local function enWifiInfo(tWifi)
-    local ret,cnt,k,v = "",0
+    local ret,cnt = "", 0
     if tWifi then
         for k,v in pairs(tWifi) do
-            log.info("lbsLoc.enWifiInfo",k,v)
-            ret = ret..dtulib.fromHexnew(pack.pack("Ab",(k:gsub(":",""))),(v<0) and (v+255) or v)
+            -- log.info("lbsLoc.enWifiInfo",k,v)
+            ret = ret..pack.pack("Ab",(k:gsub(":","")):fromHex(),(v<0) and (v+255) or v)
             cnt = cnt+1
         end
     end
@@ -156,17 +156,20 @@ end
 
 
 local function taskClient(cbFnc, reqAddr, timeout, productKey, host, port,reqTime, reqWifi)
-    while mobile.status() == 0 do
+    if mobile.status() == 0 then
         if not sys.waitUntil("IP_READY", timeout) then return cbFnc(1) end
+        sys.wait(500)
+    end
+    if productKey == nil then
+        productKey = ""
     end
     local retryCnt  = 0
-    sys.wait(3000)
     local reqStr = pack.pack("bAbAAAAA", productKey:len(), productKey,
                              (reqAddr and 2 or 0) + (reqTime and 4 or 0) + 8 +(reqWifi and 16 or 0) + 32, "",
                              numToBcdNum(mobile.imei()), enMuid(),
                              enCellInfo(mobile.getCellInfo()),
                              enWifiInfo(reqWifi))
-    log.info("reqStr", reqStr:toHex())
+    log.debug("reqStr", reqStr:toHex())
     local rx_buff = zbuff.create(17)
     -- sys.wait(5000)
     while true do
@@ -179,7 +182,7 @@ local function taskClient(cbFnc, reqAddr, timeout, productKey, host, port,reqTim
         result = libnet.connect(d1Name, 5000, netc, host, port)
         if result then
             while true do
-                log.info(" lbsloc socket_service connect true")
+                -- log.info(" lbsloc socket_service connect true")
                 result = libnet.tx(d1Name, 0, netc, reqStr) ---发送数据
                 if result then
                     result, param = libnet.wait(d1Name, 15000 + retryCnt * 5, netc)
@@ -190,20 +193,20 @@ local function taskClient(cbFnc, reqAddr, timeout, productKey, host, port,reqTim
                         if retryCnt>=3 then return cbFnc(4) end
                         break
                     end
-                    succ, param, _, _ = socket.rx(netc, rx_buff) -- 接收数据
-                    log.info("是否接收和数据长度", succ, param)
+                    succ, param = socket.rx(netc, rx_buff) -- 接收数据
+                    -- log.info("是否接收和数据长度", succ, param)
                     if param ~= 0 then -- 如果接收成功
                         socket.close(netc) -- 关闭连接
                         socket.release(netc)
                         local read_buff = rx_buff:toStr(0, param)
                         rx_buff:clear()
-                        log.info("lbsLoc receive", read_buff:toHex())
+                        log.debug("lbsLoc receive", read_buff:toHex())
                         if read_buff:len() >= 11 and(read_buff:byte(1) == 0 or read_buff:byte(1) == 0xFF) then
                             local locType = read_buff:byte(1)
                             cbFnc(0, trans(bcdNumToNum(read_buff:sub(2, 6))),
                                 trans(bcdNumToNum(read_buff:sub(7, 11))), reqAddr and
                                 read_buff:sub(13, 12 + read_buff:byte(12)) or nil,
-                                read_buff:sub(reqAddr and (13 + read_buff:byte(12)) or 12, -1),
+                                reqTime and read_buff:sub(reqAddr and (13 + read_buff:byte(12)) or 12, -1) or "",
                                 locType)
                         else
                             log.warn("lbsLoc.query", "根据基站查询经纬度失败")
@@ -211,9 +214,9 @@ local function taskClient(cbFnc, reqAddr, timeout, productKey, host, port,reqTim
                                 log.warn("lbsLoc.query","main.lua中的PRODUCT_KEY和此设备在iot.openluat.com中所属项目的ProductKey必须一致，请去检查")
                             else
                                 log.warn("lbsLoc.query","基站数据库查询不到所有小区的位置信息")
-                                log.warn("lbsLoc.query","在trace中向上搜索encellinfo，然后在电脑浏览器中打开http://bs.openluat.com/，手动查找encellinfo后的所有小区位置")
-                                log.warn("lbsLoc.query","如果手动可以查到位置，则服务器存在BUG，直接向技术人员反映问题")
-                                log.warn("lbsLoc.query","如果手动无法查到位置，则基站数据库还没有收录当前设备的小区位置信息，向技术人员反馈，我们会尽快收录")
+                                -- log.warn("lbsLoc.query","在trace中向上搜索encellinfo，然后在电脑浏览器中打开http://bs.openluat.com/，手动查找encellinfo后的所有小区位置")
+                                -- log.warn("lbsLoc.query","如果手动可以查到位置，则服务器存在BUG，直接向技术人员反映问题")
+                                -- log.warn("lbsLoc.query","如果手动无法查到位置，则基站数据库还没有收录当前设备的小区位置信息，向技术人员反馈，我们会尽快收录")
                             end
                             cbFnc(5)
                         end
@@ -244,21 +247,20 @@ end
 
 
 --[[
-发送基站/WIFI定位请求（仅支持中国区域的位置查询）
+发送基站定位请求
 @api lbsLoc.request(cbFnc,reqAddr,timeout,productKey,host,port,reqTime,reqWifi)
 @function cbFnc 用户回调函数，回调函数的调用形式为：cbFnc(result,lat,lng,addr,time,locType)
-@bool reqAddr 是否请求服务器返回具体的位置字符串信息，目前此功能不完善，参数可以传nil
+@bool reqAddr 是否请求服务器返回具体的位置字符串信息，已经不支持,填false或者nil
 @number timeout 请求超时时间，单位毫秒，默认20000毫秒
-@string productKey IOT网站上的产品证书，如果在main.lua中定义了PRODUCT_KEY变量，则此参数可以传nil
-@string host 服务器域名，此参数可选，目前仅lib中agps.lua使用此参数。应用脚本可以直接传nil
-@string port 服务器端口，此参数可选，目前仅lib中agps.lua使用此参数。应用脚本可以直接传nil
-@bool reqTime 是否需要服务器返回时间信息，true返回，false或者nil不返回，此参数可选，目前仅lib中agps.lua使用此参数。应用脚本可以直接传nil
-@table reqWifi 搜索到的WIFI热点信息(MAC地址和信号强度)，如果传入了此参数，后台会查询WIFI热点对应的经纬度，此参数格式如下：
-{["1a:fe:34:9e:a1:77"] = -63,["8c:be:be:2d:cd:e9"] = -81,["20:4e:7f:82:c2:c4"] = -70,}
+@string productKey IOT网站上的产品KEY，如果在main.lua中定义了PRODUCT_KEY变量，则此参数可以传nil
+@string host 服务器域名, 默认 "bs.openluat.com" ,可选备用服务器(不保证可用) "bs.air32.cn"
+@string port 服务器端口，默认"12411",一般不需要设置
 @return nil
+@usage
+-- 提醒: 返回的坐标值, 是WGS84坐标系
 ]]
 function lbsLoc.request(cbFnc,reqAddr,timeout,productKey,host,port,reqTime,reqWifi)
-    sysplus.taskInitEx(taskClient, d1Name, netCB, cbFnc,reqAddr or nil,timeout or 20000,productKey or _G.PRODUCT_KEY,host or "bs.openluat.com",port or "12411",reqTime,reqWifi)
+    sysplus.taskInitEx(taskClient, d1Name, netCB, cbFnc, reqAddr,timeout or 20000,productKey or _G.PRODUCT_KEY,host or "bs.openluat.com",port or "12411", reqTime == nil and true or reqTime)
 end
 
 return lbsLoc
