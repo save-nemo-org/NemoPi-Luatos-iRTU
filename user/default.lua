@@ -614,6 +614,14 @@ cmd.config = {
         else
             return "JSON ERROR"
         end
+    end,
+    ["gps"] = function(t)
+        dtu.gps.fun=t
+        return "OK"
+    end,
+    ["gps_dev"] = function(t) 
+        dtu.gps.pio=t
+        return "OK"
     end
 }
 cmd.rrpc = {
@@ -937,7 +945,7 @@ sys.taskInit(function()
             code, head, body = dtulib.request("GET", dtu.host,30000,param,nil,1)
         else
             log.info("dtuURL+++++",mobile.muid(),mobile.imei())
-            url = "http://dtu.openluat.com/api/site/device/" .. mobile.imei() .. "/param?product_name=" .. _G.PROJECT .. "&param_ver=" .. dtu.param_ver       
+            url = "http://dtu.openluat.com/api/site/device/" .. mobile.imei() .. "/param?product_name=" .. _G.PROJECT .. "&param_ver=" .. dtu.param_ver.."&project_key=".._G.PRODUCT_KEY     
             code, head, body = dtulib.request("GET", url,30000,nil,nil,1,mobile.imei()..":"..mobile.muid())
         end
         if tonumber(code) == 200 and body then
