@@ -1,3 +1,5 @@
+# Deprecated -- Use https://github.com/save-nemo-org/NemoPi-DTU
+
 # LuatOS-IRTU
 
 master是已发布的代码的分支, 开发分支是dev
